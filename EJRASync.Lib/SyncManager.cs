@@ -206,6 +206,7 @@ namespace EJRASync.Lib
                 BucketName = bucketName,
                 Key = key
             };
+            Console.WriteLine($"Requesting {key}...");
             var metadataResponse = await this._s3Client.GetObjectMetadataAsync(metadataRequest);
             var remoteETag = metadataResponse.ETag.Trim('"');
 
