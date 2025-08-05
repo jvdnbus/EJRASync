@@ -4,7 +4,6 @@ using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
 using System.Collections.ObjectModel;
-using System.Windows;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class RemoteFileListViewModel : ObservableObject {
@@ -201,7 +200,7 @@ namespace EJRASync.UI.ViewModels {
 
 			// Remove trailing slash if present
 			var cleanPrefix = prefix.TrimEnd('/');
-			
+
 			// If after removing trailing slash we have an empty string, we're at bucket root
 			if (string.IsNullOrEmpty(cleanPrefix))
 				return "";

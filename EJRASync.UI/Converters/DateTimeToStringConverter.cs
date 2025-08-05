@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.Windows.Data;
 
@@ -10,12 +9,12 @@ namespace EJRASync.UI {
 				if (dateTime == DateTime.MinValue) {
 					return string.Empty;
 				}
-				
+
 				// Use the format string from parameter if provided, otherwise use default
 				string format = parameter as string ?? "yyyy-MM-dd HH:mm";
 				return dateTime.ToString(format);
 			}
-			
+
 			return string.Empty;
 		}
 

@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Threading;
 
 namespace EJRASync.UI.Utils {
 	public static class DispatcherExtensions {

@@ -1,7 +1,5 @@
-using System;
 using System.Globalization;
 using System.Windows.Data;
-using System.Windows.Controls;
 
 namespace EJRASync.UI {
 	public class ContextMenuVisibilityConverter : IMultiValueConverter {

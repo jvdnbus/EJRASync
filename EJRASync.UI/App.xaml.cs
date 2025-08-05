@@ -3,11 +3,33 @@ using EJRASync.Lib;
 using EJRASync.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using System.Security.Principal;
 using System.Windows;
 
 namespace EJRASync.UI {
 	public partial class App : Application {
 		private IHost? _host;
+
+		public App() {
+			var currentUser = WindowsIdentity.GetCurrent().Name;
+
+			DispatcherUnhandledException += App_DispatcherUnhandledException;
+			SentrySdk.Init(options => {
+				options.Dsn = Constants.SentryDSN;
+				options.Debug = false;
+				options.AutoSessionTracking = true;
+				options.TracesSampleRate = 1.0;
+				options.ProfilesSampleRate = 1.0;
+			});
+
+			SentrySdk.ConfigureScope(scope => {
+				scope.SetTag("username", currentUser);
+			});
+		}
+
+		private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
+			SentrySdk.CaptureException(e.Exception);
+		}
 
 		protected override async void OnStartup(StartupEventArgs e) {
 			_host = Host.CreateDefaultBuilder()

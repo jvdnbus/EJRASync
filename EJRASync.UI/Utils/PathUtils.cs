@@ -10,7 +10,7 @@ namespace EJRASync.UI.Utils {
 
 			// Convert all backslashes to forward slashes first
 			var normalized = path.Replace('\\', '/');
-			
+
 			// Then remove duplicate forward slashes
 			normalized = DuplicateForwardSlashRegex.Replace(normalized, "/");
 

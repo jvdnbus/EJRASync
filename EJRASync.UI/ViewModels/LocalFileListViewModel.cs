@@ -6,7 +6,6 @@ using EJRASync.UI.Utils;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
-using System.Windows;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class LocalFileListViewModel : ObservableObject {
