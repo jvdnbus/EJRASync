@@ -4,16 +4,600 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EJRASync.UI"
+        xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
-        Title="EJRA Sync Manager" Height="350" Width="525">
+        Title="EJRA Sync Manager" Height="800" Width="1400" MinHeight="700" MinWidth="1000"
+        Background="#FAFAFA">
+    <Window.Resources>
+        <!-- Value converters for UI state -->
+        <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <local:BooleanToOpacityConverter x:Key="BooleanToOpacityConverter"/>
+        <local:DateTimeToStringConverter x:Key="DateTimeToStringConverter"/>
+        <local:ContextMenuVisibilityConverter x:Key="ContextMenuVisibilityConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        
+        <!-- Define the context menu as a resource -->
+        <ContextMenu x:Key="RemoteFileContextMenu">
+            <MenuItem Header="Tag as Active" 
+                     Command="{Binding RemoteFiles.TagAsActiveCommand}"
+                     CommandParameter="{Binding RemoteFiles.SelectedFile}"
+                     Icon="✅">
+                <MenuItem.Style>
+                    <Style TargetType="MenuItem">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsDirectory}" Value="True"/>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsActive}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsDirectory}" Value="True"/>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsActive}" Value="{x:Null}"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </MenuItem.Style>
+            </MenuItem>
+            <MenuItem Header="Tag as Inactive" 
+                     Command="{Binding RemoteFiles.TagAsActiveCommand}"
+                     CommandParameter="{Binding RemoteFiles.SelectedFile}"
+                     Icon="❌">
+                <MenuItem.Style>
+                    <Style TargetType="MenuItem">
+                        <Setter Property="Visibility" Value="Collapsed"/>
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsDirectory}" Value="True"/>
+                                    <Condition Binding="{Binding RemoteFiles.SelectedFile.IsActive}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </MenuItem.Style>
+            </MenuItem>
+            <Separator/>
+            <MenuItem Header="Delete" 
+                     Command="{Binding RemoteFiles.DeleteRemoteFileCommand}"
+                     CommandParameter="{Binding RemoteFiles.SelectedFile}"
+                     Icon="🗑️"/>
+        </ContextMenu>
+        
+        <!-- Modern Button Style -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#F3F3F3"/>
+            <Setter Property="Foreground" Value="#202020"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#E6E6E6"/>
+                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#DADADA"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#F5F5F5"/>
+                                <Setter Property="Foreground" Value="#A0A0A0"/>
+                                <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern TextBox Style -->
+        <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="#202020"/>
+            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ScrollViewer x:Name="PART_ContentHost" 
+                                        Focusable="False"
+                                        HorizontalScrollBarVisibility="Hidden"
+                                        VerticalScrollBarVisibility="Hidden"
+                                        Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                            </Trigger>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="#0078D4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid>
-        <DataGrid ItemsSource="{Binding ContentItems}" AutoGenerateColumns="False">
-            <DataGrid.Columns>
-                <DataGridTextColumn Header="Name" Binding="{Binding Name}" />
-                <DataGridTextColumn Header="Type" Binding="{Binding Type}" />
-                <DataGridTextColumn Header="Path" Binding="{Binding Status}" />
-            </DataGrid.Columns>
-        </DataGrid>
-        <Button Content="Sync" Command="{Binding SyncCommand}" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10"></Button>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/> <!-- Top bar -->
+            <RowDefinition Height="Auto"/> <!-- Path navigation -->
+            <RowDefinition Height="*"/>    <!-- File panes -->
+            <RowDefinition Height="Auto"/> <!-- Action buttons -->
+            <RowDefinition Height="Auto"/> <!-- Status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- Top Bar -->
+        <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" Margin="20,12" VerticalAlignment="Center">
+                <Button Content="Scan Changes" 
+                        Command="{Binding ScanChangesCommand}" 
+                        Style="{StaticResource ModernButtonStyle}"
+                        Margin="0,0,12,0" />
+                <Button Content="Release" 
+                        IsEnabled="False" 
+                        Style="{StaticResource ModernButtonStyle}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Path Navigation Bars -->
+        <Border Grid.Row="1" Background="#F8F8F8" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+            <Grid Margin="20,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="8"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Labels -->
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="Local Directory" 
+                           FontWeight="SemiBold" FontSize="13" Foreground="#404040" Margin="4,0"/>
+                <TextBlock Grid.Row="0" Grid.Column="2" Text="Remote Storage" 
+                           FontWeight="SemiBold" FontSize="13" Foreground="#404040" Margin="4,0"/>
+                
+                <!-- Path TextBoxes -->
+                <TextBox Grid.Row="2" Grid.Column="0" 
+                         Text="{Binding NavigationContext.LocalCurrentPath, Mode=OneWay}" 
+                         IsReadOnly="True" 
+                         Style="{StaticResource ModernTextBoxStyle}"/>
+                
+                <TextBox Grid.Row="2" Grid.Column="2" 
+                         Text="{Binding RemoteFiles.CurrentPath, Mode=OneWay}" 
+                         IsReadOnly="True" 
+                         Style="{StaticResource ModernTextBoxStyle}"/>
+            </Grid>
+        </Border>
+
+        <!-- File Panes -->
+        <Grid Grid.Row="2" Margin="20,16,20,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Local File List -->
+            <Border Grid.Column="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Header -->
+
+                    <!-- File list -->
+                    <DataGrid Grid.Row="1" 
+                             ItemsSource="{Binding LocalFiles.Files}"
+                             SelectedItem="{Binding LocalFiles.SelectedFile}"
+                             AutoGenerateColumns="False"
+                             GridLinesVisibility="None"
+                             HeadersVisibility="Column"
+                             SelectionMode="Single"
+                             CanUserAddRows="False"
+                             CanUserDeleteRows="False"
+                             CanUserReorderColumns="False"
+                             CanUserResizeRows="False"
+                             IsEnabled="{Binding LocalFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
+                             Opacity="{Binding LocalFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
+                             Background="White"
+                             BorderThickness="0"
+                             RowHeight="24"
+                             FontSize="13"
+                             Margin="0,0,0,4" ColumnHeaderHeight="30">
+
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            </Style>
+                        </DataGrid.CellStyle>
+
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#E3F2FD"/>
+                                        <Setter Property="BorderBrush" Value="#2196F3"/>
+                                    </Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#F0F8FF"/>
+                                    </Trigger>
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsSelected" Value="True"/>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" Value="#BBDEFB"/>
+                                        <Setter Property="BorderBrush" Value="#1976D2"/>
+                                    </MultiTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+
+                        <DataGrid.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Compress &amp; upload" 
+                                         Command="{Binding LocalFiles.CompressAndUploadCommand}"
+                                         CommandParameter="{Binding LocalFiles.SelectedFile}"
+                                         Icon="📦"/>
+                                <MenuItem Header="Raw upload" 
+                                         Command="{Binding LocalFiles.RawUploadCommand}"
+                                         CommandParameter="{Binding LocalFiles.SelectedFile}"
+                                         Icon="🔼"/>
+                                <Separator/>
+                                <MenuItem Header="Show in Explorer" 
+                                         Command="{Binding LocalFiles.ViewInExplorerCommand}"
+                                         CommandParameter="{Binding LocalFiles.SelectedFile}"
+                                         Icon="📁"/>
+                            </ContextMenu>
+                        </DataGrid.ContextMenu>
+
+                        <DataGrid.InputBindings>
+                            <MouseBinding Gesture="LeftDoubleClick" 
+                                         Command="{Binding LocalFiles.NavigateToCommand}"
+                                         CommandParameter="{Binding LocalFiles.SelectedFile}"/>
+                        </DataGrid.InputBindings>
+
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <DataGridTextColumn Header="Size" Binding="{Binding DisplaySize}" Width="80" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+
+                            <DataGridTextColumn Header="Modified" Binding="{Binding LastModified, Converter={StaticResource DateTimeToStringConverter}, ConverterParameter='yyyy-MM-dd HH:mm'}" Width="130" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+
+            <!-- Remote File List -->
+            <Border Grid.Column="2" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Header -->
+
+                    <!-- File list -->
+                    <DataGrid Grid.Row="1" 
+                             ItemsSource="{Binding RemoteFiles.Files}"
+                             SelectedItem="{Binding RemoteFiles.SelectedFile}"
+                             AutoGenerateColumns="False"
+                             GridLinesVisibility="None"
+                             HeadersVisibility="Column"
+                             SelectionMode="Single"
+                             CanUserAddRows="False"
+                             CanUserDeleteRows="False"
+                             CanUserReorderColumns="False"
+                             CanUserResizeRows="False"
+                             IsEnabled="{Binding RemoteFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
+                             Opacity="{Binding RemoteFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
+                             Background="White"
+                             BorderThickness="0"
+                             RowHeight="24"
+                             FontSize="13"
+                             Margin="0,0,0,4" ColumnHeaderHeight="30">
+                        
+                        <DataGrid.CellStyle>
+                            <Style TargetType="DataGridCell">
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            </Style>
+                        </DataGrid.CellStyle>
+
+                        <DataGrid.RowStyle>
+                            <Style TargetType="DataGridRow">
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Style.Triggers>
+                                    <!-- Default state for all rows -->
+                                    <DataTrigger Binding="{Binding IsActive}" Value="{x:Null}">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                    </DataTrigger>
+                                    
+                                    <!-- Active items -->
+                                    <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                        <Setter Property="Background" Value="#E8F5E8"/>
+                                    </DataTrigger>
+                                    
+                                    <!-- Inactive items -->
+                                    <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                        <Setter Property="Background" Value="#FFEBEE"/>
+                                        <Setter Property="Opacity" Value="0.7"/>
+                                    </DataTrigger>
+                                    
+                                    <!-- Selection - higher priority than IsActive -->
+                                    <Trigger Property="IsSelected" Value="True">
+                                        <Setter Property="Background" Value="#E3F2FD"/>
+                                        <Setter Property="BorderBrush" Value="#2196F3"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
+                                    </Trigger>
+                                    
+                                    <!-- Hover effect -->
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#F0F8FF"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
+                                    </Trigger>
+                                    
+                                    <!-- Selected + Hover -->
+                                    <MultiTrigger>
+                                        <MultiTrigger.Conditions>
+                                            <Condition Property="IsSelected" Value="True"/>
+                                            <Condition Property="IsMouseOver" Value="True"/>
+                                        </MultiTrigger.Conditions>
+                                        <Setter Property="Background" Value="#BBDEFB"/>
+                                        <Setter Property="BorderBrush" Value="#1976D2"/>
+                                        <Setter Property="Opacity" Value="1.0"/>
+                                    </MultiTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </DataGrid.RowStyle>
+                        
+                        <DataGrid.ContextMenu>
+                            <MultiBinding Converter="{StaticResource ContextMenuVisibilityConverter}" 
+                                          ConverterParameter="{StaticResource RemoteFileContextMenu}">
+                                <Binding Path="NavigationContext.SelectedBucket"/>
+                            </MultiBinding>
+                        </DataGrid.ContextMenu>
+
+                        <DataGrid.InputBindings>
+                            <MouseBinding Gesture="LeftDoubleClick" 
+                                         Command="{Binding RemoteFiles.NavigateToCommand}"
+                                         CommandParameter="{Binding RemoteFiles.SelectedFile}"/>
+                        </DataGrid.InputBindings>
+
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            
+                            <DataGridTextColumn Header="Size" Binding="{Binding DisplaySize}" Width="80" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                            
+                            <DataGridTemplateColumn Header="C" Width="30">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" Margin="8,0">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCompressed}" Value="True">
+                                                            <Setter Property="Text" Value="✓"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsCompressed}" Value="False">
+                                                            <Setter Property="Text" Value=""/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
+                            
+                            <DataGridTextColumn Header="Modified" Binding="{Binding LastModified, Converter={StaticResource DateTimeToStringConverter}, ConverterParameter='yyyy-MM-dd HH:mm'}" Width="130" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
+                        </DataGrid.Columns>
+                    </DataGrid>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Action Buttons -->
+        <Border Grid.Row="3" Background="#F8F8F8" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+            <StackPanel Orientation="Horizontal" 
+                       HorizontalAlignment="Right" 
+                       Margin="20,16">
+                <Button Content="{Binding ViewChangesButtonText}" 
+                        Command="{Binding ViewChangesCommand}" 
+                        Style="{StaticResource ModernButtonStyle}"
+                        Margin="0,0,12,0" />
+                <Button Content="Discard" 
+                        Command="{Binding DiscardChangesCommand}" 
+                        Style="{StaticResource ModernButtonStyle}"
+                        Background="#FFEBEE"
+                        Foreground="#C62828"
+                        BorderBrush="#FFCDD2"
+                        Margin="0,0,12,0">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center"
+                                                Margin="{TemplateBinding Padding}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#FFCDD2"/>
+                                    <Setter Property="BorderBrush" Value="#EF9A9A"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Background" Value="#EF9A9A"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="#F5F5F5"/>
+                                    <Setter Property="Foreground" Value="#A0A0A0"/>
+                                    <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+                <Button Content="Apply Changes" 
+                        Command="{Binding ApplyChangesCommand}" 
+                        Style="{StaticResource ModernButtonStyle}"
+                        Background="#E8F5E8"
+                        Foreground="#2E7D32"
+                        BorderBrush="#C8E6C9">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="4">
+                                <ContentPresenter HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center"
+                                                Margin="{TemplateBinding Padding}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#C8E6C9"/>
+                                    <Setter Property="BorderBrush" Value="#A5D6A7"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter Property="Background" Value="#A5D6A7"/>
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter Property="Background" Value="#F5F5F5"/>
+                                    <Setter Property="Foreground" Value="#A0A0A0"/>
+                                    <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </StackPanel>
+        </Border>
+
+        <!-- Status Bar -->
+        <Border Grid.Row="4" Background="#F8F9FA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+            <Grid Height="36" Margin="20,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="200"/>
+                </Grid.ColumnDefinitions>
+                
+                <TextBlock Grid.Column="0" 
+                          Text="{Binding StatusMessage}" 
+                          VerticalAlignment="Center"
+                          FontSize="13"
+                          Foreground="#404040"/>
+                
+                <ProgressBar Grid.Column="1" 
+                            Value="{Binding ProgressValue}" 
+                            Maximum="100" 
+                            Height="6" 
+                            VerticalAlignment="Center"
+                            Background="#E0E0E0"
+                            Foreground="#0078D4"
+                            BorderThickness="0"
+                            Visibility="Visible">
+                    <ProgressBar.Template>
+                        <ControlTemplate TargetType="ProgressBar">
+                            <Border Background="{TemplateBinding Background}" 
+                                    CornerRadius="3"
+                                    ClipToBounds="True">
+                                <Grid>
+                                    <Rectangle Name="PART_Track" />
+                                    <Grid Name="PART_Indicator" 
+                                          ClipToBounds="True"
+                                          HorizontalAlignment="Left">
+                                        <Rectangle Name="Indicator" 
+                                                   Fill="{TemplateBinding Foreground}"
+                                                   RadiusX="3" RadiusY="3"/>
+                                    </Grid>
+                                </Grid>
+                            </Border>
+                        </ControlTemplate>
+                    </ProgressBar.Template>
+                </ProgressBar>
+            </Grid>
+        </Border>
     </Grid>
 </Window>

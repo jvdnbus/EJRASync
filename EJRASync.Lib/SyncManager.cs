@@ -92,7 +92,7 @@ namespace EJRASync.Lib {
 					// Only DownloadFileAsync if the local file is older than the S3 object
 					if (File.Exists(localFilePath)) {
 						var localFileTime = File.GetLastWriteTime(localFilePath);
-						var s3ObjectTime = s3Object.LastModified.ToLocalTime();
+						var s3ObjectTime = s3Object.LastModified;
 						var localFileChecksum = FileChecksum.Calculate(localFilePath);
 						var s3ObjectChecksum = s3Object.ETag.Trim('"');
 

@@ -11,19 +11,19 @@
     <RepositoryUrl>https://github.com/predominant/EJRASync</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageProjectUrl>https://github.com/predominant/EJRASync</PackageProjectUrl>
-    <ApplicationIcon>EJRA.ico</ApplicationIcon>
+    <ApplicationIcon>ejra-icon.ico</ApplicationIcon>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="EJRA.ico" />
+    <Content Include="ejra-icon.ico" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="AWSSDK.S3" Version="3.7.309.11" />
-    <PackageReference Include="Sentry" Version="4.8.0" />
-    <PackageReference Include="Sentry.Profiling" Version="4.8.0" />
-    <PackageReference Include="Spectre.Console" Version="0.49.1" />
+    <PackageReference Include="AWSSDK.S3" Version="4.0.6.2" />
+    <PackageReference Include="Sentry" Version="5.13.0" />
+    <PackageReference Include="Sentry.Profiling" Version="5.13.0" />
+    <PackageReference Include="Spectre.Console" Version="0.50.0" />
   </ItemGroup>
 
   <ItemGroup>
