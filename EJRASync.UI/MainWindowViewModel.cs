@@ -13,6 +13,8 @@ namespace EJRASync.UI {
 		private readonly IFileService _fileService;
 		private readonly IContentStatusService _contentStatusService;
 		private readonly ICompressionService _compressionService;
+		private readonly IEjraAuthApiService _authApi;
+		private readonly IEjraAuthService _authService;
 
 		[ObservableProperty]
 		private ObservableCollection<PendingChange> _pendingChanges = new();
@@ -32,6 +34,23 @@ namespace EJRASync.UI {
 		[ObservableProperty]
 		private bool _isApplying = false;
 
+		[ObservableProperty]
+		private bool _hasWriteAccess = false;
+
+		[ObservableProperty]
+		private bool _isLoggedIn = false;
+
+		[ObservableProperty]
+		private string? _userDisplayName;
+
+		[ObservableProperty]
+		private string? _userProfileImageUrl;
+
+		[ObservableProperty]
+		private string? _userProviderName;
+
+		private OAuthToken? _currentOAuthToken;
+
 		public LocalFileListViewModel LocalFiles { get; }
 		public RemoteFileListViewModel RemoteFiles { get; }
 
@@ -39,11 +58,15 @@ namespace EJRASync.UI {
 			IS3Service s3Service,
 			IFileService fileService,
 			IContentStatusService contentStatusService,
-			ICompressionService compressionService) {
+			ICompressionService compressionService,
+			IEjraAuthApiService authApi,
+			IEjraAuthService authService) {
 			_s3Service = s3Service;
 			_fileService = fileService;
 			_contentStatusService = contentStatusService;
 			_compressionService = compressionService;
+			_authApi = authApi;
+			_authService = authService;
 
 			LocalFiles = new LocalFileListViewModel(_fileService, this);
 			RemoteFiles = new RemoteFileListViewModel(_s3Service, _contentStatusService, this);
@@ -58,6 +81,17 @@ namespace EJRASync.UI {
 		public async Task InitializeAsync() {
 			await _contentStatusService.InitializeAsync();
 			await LocalFiles.LoadFilesAsync(NavigationContext.LocalCurrentPath);
+			await CheckWriteAccessAsync();
+		}
+
+		private async Task CheckWriteAccessAsync() {
+			try {
+				var tokens = await _authApi.GetTokensAsync();
+				HasWriteAccess = tokens?.UserWrite != null;
+			}
+			catch {
+				HasWriteAccess = false;
+			}
 		}
 
 		[RelayCommand(CanExecute = nameof(CanScanChanges))]
@@ -68,6 +102,10 @@ namespace EJRASync.UI {
 
 			try {
 				PendingChanges.Clear();
+				OnPropertyChanged(nameof(ViewChangesButtonText));
+				ViewChangesCommand.NotifyCanExecuteChanged();
+				DiscardChangesCommand.NotifyCanExecuteChanged();
+				ApplyChangesCommand.NotifyCanExecuteChanged();
 
 				var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName, EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
 				var localFolders = new[] { "content/cars", "content/tracks", "content/fonts", "apps" };
@@ -141,15 +179,19 @@ namespace EJRASync.UI {
 			dialog.ShowDialog();
 		}
 
-		private bool CanViewChanges() => PendingChanges.Count > 0;
+		private bool CanViewChanges() => PendingChanges.Count > 0 && HasWriteAccess;
 
 		[RelayCommand(CanExecute = nameof(CanDiscardChanges))]
 		private void DiscardChanges() {
 			PendingChanges.Clear();
+			OnPropertyChanged(nameof(ViewChangesButtonText));
+			ViewChangesCommand.NotifyCanExecuteChanged();
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+			ApplyChangesCommand.NotifyCanExecuteChanged();
 			StatusMessage = "Changes discarded";
 		}
 
-		private bool CanDiscardChanges() => PendingChanges.Count > 0;
+		private bool CanDiscardChanges() => PendingChanges.Count > 0 && HasWriteAccess;
 
 		[RelayCommand(CanExecute = nameof(CanApplyChanges))]
 		private async Task ApplyChangesAsync() {
@@ -178,6 +220,10 @@ namespace EJRASync.UI {
 				});
 
 				PendingChanges.Clear();
+				OnPropertyChanged(nameof(ViewChangesButtonText));
+				ViewChangesCommand.NotifyCanExecuteChanged();
+				DiscardChangesCommand.NotifyCanExecuteChanged();
+				ApplyChangesCommand.NotifyCanExecuteChanged();
 				StatusMessage = $"Successfully applied {processedChanges} changes";
 			} catch (Exception ex) {
 				StatusMessage = $"Error applying changes: {ex.Message}";
@@ -228,16 +274,75 @@ namespace EJRASync.UI {
 			await _s3Service.UploadDataAsync(change.BucketName, change.RemoteKey, yamlData);
 		}
 
-		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying;
+		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
+
+		[RelayCommand]
+		private async Task LoginAsync() {
+			try {
+				var dialog = new EJRASync.UI.Views.OAuthDialog(_authService);
+				
+				// Show dialog and start authentication on UI thread
+				var dialogTask = dialog.StartAuthenticationAsync();
+				
+				var result = dialog.ShowDialog();
+				
+				if (result == true && dialog.OAuthToken != null) {
+					StatusMessage = "Login successful! Checking permissions...";
+					
+					// Store the OAuth token and update user info
+					_currentOAuthToken = dialog.OAuthToken;
+					UserDisplayName = dialog.OAuthToken.GetDisplayName();
+					UserProfileImageUrl = dialog.OAuthToken.GetProfileImageUrl();
+					UserProviderName = dialog.OAuthToken.GetProviderName();
+					IsLoggedIn = true;
+					
+					// Get write R2 tokens using the OAuth token
+					var tokens = await _authApi.GetTokensAsync(dialog.OAuthToken);
+					
+					if (tokens?.UserWrite != null) {
+						HasWriteAccess = true;
+						StatusMessage = "Login successful! You now have write access.";
+					} else {
+						StatusMessage = "Login successful, but no write access granted.";
+					}
+				} else {
+					StatusMessage = "Login cancelled or failed.";
+				}
+			} catch (Exception ex) {
+				StatusMessage = $"Login failed: {ex.Message}";
+				SentrySdk.CaptureException(ex);
+			}
+		}
+
+		[RelayCommand]
+		private void Logout() {
+			_currentOAuthToken = null;
+			UserDisplayName = null;
+			UserProfileImageUrl = null;
+			UserProviderName = null;
+			IsLoggedIn = false;
+			HasWriteAccess = false;
+			StatusMessage = "Logged out successfully.";
+		}
 
 		public string ViewChangesButtonText => $"View {PendingChanges.Count} changes";
 
 		public void AddPendingChange(PendingChange change) {
 			PendingChanges.Add(change);
+			OnPropertyChanged(nameof(ViewChangesButtonText));
+			ViewChangesCommand.NotifyCanExecuteChanged();
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+			ApplyChangesCommand.NotifyCanExecuteChanged();
 		}
 
 		partial void OnPendingChangesChanged(ObservableCollection<PendingChange> value) {
 			OnPropertyChanged(nameof(ViewChangesButtonText));
+		}
+
+		partial void OnHasWriteAccessChanged(bool value) {
+			ViewChangesCommand.NotifyCanExecuteChanged();
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+			ApplyChangesCommand.NotifyCanExecuteChanged();
 		}
 	}
 }

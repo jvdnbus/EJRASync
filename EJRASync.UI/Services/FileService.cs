@@ -10,38 +10,40 @@ namespace EJRASync.UI.Services {
 			if (!Directory.Exists(directoryPath))
 				return items;
 
-			try {
-				// Add directories first
-				var directories = Directory.GetDirectories(directoryPath);
-				foreach (var dir in directories) {
-					var dirInfo = new DirectoryInfo(dir);
-					items.Add(new LocalFileItem {
-						Name = dirInfo.Name,
-						FullPath = dir,
-						DisplaySize = "Folder",
-						LastModified = dirInfo.LastWriteTime,
-						IsDirectory = true
-					});
-				}
+			await Task.Run(() => {
+				try {
+					// Add directories first
+					var directories = Directory.GetDirectories(directoryPath);
+					foreach (var dir in directories) {
+						var dirInfo = new DirectoryInfo(dir);
+						items.Add(new LocalFileItem {
+							Name = dirInfo.Name,
+							FullPath = dir,
+							DisplaySize = "Folder",
+							LastModified = dirInfo.LastWriteTime,
+							IsDirectory = true
+						});
+					}
 
-				// Add files
-				var files = Directory.GetFiles(directoryPath);
-				foreach (var file in files) {
-					var fileInfo = new FileInfo(file);
-					items.Add(new LocalFileItem {
-						Name = fileInfo.Name,
-						FullPath = file,
-						DisplaySize = FormatFileSize(fileInfo.Length),
-						LastModified = fileInfo.LastWriteTime,
-						SizeBytes = fileInfo.Length,
-						IsDirectory = false
-					});
+					// Add files
+					var files = Directory.GetFiles(directoryPath);
+					foreach (var file in files) {
+						var fileInfo = new FileInfo(file);
+						items.Add(new LocalFileItem {
+							Name = fileInfo.Name,
+							FullPath = file,
+							DisplaySize = FormatFileSize(fileInfo.Length),
+							LastModified = fileInfo.LastWriteTime,
+							SizeBytes = fileInfo.Length,
+							IsDirectory = false
+						});
+					}
+				} catch (UnauthorizedAccessException) {
+					// Handle access denied
+				} catch (Exception ex) {
+					Console.WriteLine($"Error listing files in {directoryPath}: {ex.Message}");
 				}
-			} catch (UnauthorizedAccessException) {
-				// Handle access denied
-			} catch (Exception ex) {
-				Console.WriteLine($"Error listing files in {directoryPath}: {ex.Message}");
-			}
+			});
 
 			return items.OrderByDescending(x => x.IsDirectory).ThenBy(x => x.Name).ToList();
 		}

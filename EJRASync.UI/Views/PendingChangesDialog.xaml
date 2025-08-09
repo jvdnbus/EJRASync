@@ -3,10 +3,15 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EJRASync.UI"
         mc:Ignorable="d"
         Title="Pending Changes" Height="500" Width="800" 
         WindowStartupLocation="CenterOwner"
-        ResizeMode="CanResize">
+        ResizeMode="CanResize"
+        Background="#1E1E1E">
+    <Window.Resources>
+        <local:FileSizeConverter x:Key="FileSizeConverter"/>
+    </Window.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -15,8 +20,8 @@
         </Grid.RowDefinitions>
         
         <!-- Header -->
-        <Border Grid.Row="0" Background="#F5F5F5" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="10">
-            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="Bold"/>
+        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" Padding="10">
+            <TextBlock Text="{Binding Title}" FontSize="16" FontWeight="Bold" Foreground="#F0F0F0"/>
         </Border>
         
         <!-- Changes List -->
@@ -30,7 +35,31 @@
                  CanUserDeleteRows="False"
                  CanUserReorderColumns="False"
                  CanUserResizeRows="False"
+                 Background="#1E1E1E"
+                 Foreground="#F0F0F0"
                  Margin="10">
+            <DataGrid.CellStyle>
+                <Style TargetType="DataGridCell">
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="Foreground" Value="#F0F0F0"/>
+                </Style>
+            </DataGrid.CellStyle>
+            <DataGrid.RowStyle>
+                <Style TargetType="DataGridRow">
+                    <Setter Property="Background" Value="#1E1E1E"/>
+                    <Setter Property="BorderBrush" Value="#3E3E42"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter Property="Background" Value="#094771"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#2A2D2E"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </DataGrid.RowStyle>
             
             <DataGrid.Columns>
                 <DataGridTemplateColumn Header="Type" Width="120">
@@ -41,21 +70,21 @@
                                     <Style TargetType="Border">
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Type}" Value="CompressAndUpload">
-                                                <Setter Property="Background" Value="#E3F2FD"/>
+                                                <Setter Property="Background" Value="#1E3A5F"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Type}" Value="RawUpload">
-                                                <Setter Property="Background" Value="#E8F5E8"/>
+                                                <Setter Property="Background" Value="#1E3A1E"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Type}" Value="UpdateYaml">
-                                                <Setter Property="Background" Value="#FFF3E0"/>
+                                                <Setter Property="Background" Value="#3A2F1E"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Type}" Value="DeleteRemote">
-                                                <Setter Property="Background" Value="#FFEBEE"/>
+                                                <Setter Property="Background" Value="#3A1E1E"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
-                                <TextBlock Text="{Binding Type}" FontSize="11" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding Type}" FontSize="11" FontWeight="SemiBold" Foreground="#F0F0F0"/>
                             </Border>
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
@@ -75,7 +104,27 @@
         
         <!-- Footer -->
         <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
-            <Button Content="Close" Click="CloseButton_Click" Padding="15,5" Background="#9E9E9E" Foreground="White" BorderBrush="#757575"/>
+            <Button Content="Close" Click="CloseButton_Click" Padding="15,5" Background="#2D2D30" Foreground="#F0F0F0" BorderBrush="#3E3E42">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3E3E42"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#555"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
         </StackPanel>
     </Grid>
 </Window>

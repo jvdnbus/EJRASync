@@ -33,50 +33,46 @@ namespace EJRASync.UI.ViewModels {
 			if (!_fileService.IsValidDirectory(path))
 				return;
 
-			_ = Task.Run(async () => {
-				try {
-					await this.InvokeUIAsync(() => {
-						_mainViewModel.StatusMessage = "Loading local files...";
-						IsLoading = true;
-						CurrentPath = PathUtils.NormalizePath(path);
-						_mainViewModel.NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(path);
-					});
+			try {
+				await this.InvokeUIAsync(() => {
+					_mainViewModel.StatusMessage = "Loading local files...";
+					IsLoading = true;
+					CurrentPath = PathUtils.NormalizePath(path);
+					_mainViewModel.NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(path);
+				});
 
-					var files = await _fileService.GetLocalFilesAsync(path);
+				var files = await _fileService.GetLocalFilesAsync(path);
 
-					await this.InvokeUIAsync(() => {
-						Files.Clear();
+				await this.InvokeUIAsync(() => {
+					Files.Clear();
 
-						// Add parent directory navigation if not at root
-						var basePath = _mainViewModel.NavigationContext.LocalBasePath;
-						if (!string.Equals(path, basePath, StringComparison.OrdinalIgnoreCase)) {
-							Files.Add(new LocalFileItem {
-								Name = "..",
-								FullPath = _fileService.GetParentDirectory(path),
-								DisplaySize = "Folder",
-								IsDirectory = true,
-								LastModified = DateTime.MinValue
-							});
-						}
+					// Add parent directory navigation if not at root
+					var basePath = _mainViewModel.NavigationContext.LocalBasePath;
+					if (!string.Equals(path, basePath, StringComparison.OrdinalIgnoreCase)) {
+						Files.Add(new LocalFileItem {
+							Name = "..",
+							FullPath = _fileService.GetParentDirectory(path),
+							DisplaySize = "Folder",
+							IsDirectory = true,
+							LastModified = DateTime.MinValue
+						});
+					}
 
-						foreach (var file in files) {
-							Files.Add(file);
-						}
-					});
+					foreach (var file in files) {
+						Files.Add(file);
+					}
 
-					await this.InvokeUIAsync(() => {
-						_mainViewModel.StatusMessage = "Ready";
-					});
-				} catch (Exception ex) {
-					await this.InvokeUIAsync(() => {
-						_mainViewModel.StatusMessage = $"Error loading files: {ex.Message}";
-					});
-				} finally {
-					await this.InvokeUIAsync(() => {
-						IsLoading = false;
-					});
-				}
-			});
+					_mainViewModel.StatusMessage = "Ready";
+				});
+			} catch (Exception ex) {
+				await this.InvokeUIAsync(() => {
+					_mainViewModel.StatusMessage = $"Error loading files: {ex.Message}";
+				});
+			} finally {
+				await this.InvokeUIAsync(() => {
+					IsLoading = false;
+				});
+			}
 		}
 
 		[RelayCommand]
@@ -89,10 +85,46 @@ namespace EJRASync.UI.ViewModels {
 		}
 
 		[RelayCommand]
-		private void CompressAndUpload(LocalFileItem? file) {
-			if (file == null || file.IsDirectory)
+		private async void CompressAndUpload(LocalFileItem? file) {
+			if (file == null)
 				return;
 
+			if (file.IsDirectory) {
+				await ProcessDirectoryForCompressAndUpload(file.FullPath);
+			} else {
+				ProcessFileForCompressAndUpload(file);
+			}
+		}
+
+		private async Task ProcessDirectoryForCompressAndUpload(string directoryPath) {
+			var bucketName = DetermineBucketName(directoryPath);
+			if (string.IsNullOrEmpty(bucketName))
+				return;
+
+			try {
+				// Collect all files from directory and subdirectories
+				var allFiles = await CollectAllFilesFromDirectory(directoryPath);
+				
+				if (!allFiles.Any()) {
+					_mainViewModel.StatusMessage = "No files found in directory";
+					return;
+				}
+
+				var directoryName = Path.GetFileName(directoryPath);
+				_mainViewModel.StatusMessage = $"Adding {allFiles.Count} files from {directoryName} for compress & upload...";
+
+				// Process all files in one batch
+				foreach (var file in allFiles) {
+					ProcessFileForCompressAndUpload(file);
+				}
+
+				_mainViewModel.StatusMessage = $"Added {allFiles.Count} files from {directoryName} for compress & upload";
+			} catch (Exception ex) {
+				_mainViewModel.StatusMessage = $"Error processing directory {directoryPath}: {ex.Message}";
+			}
+		}
+
+		private void ProcessFileForCompressAndUpload(LocalFileItem file) {
 			var bucketName = DetermineBucketName(file.FullPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -111,10 +143,46 @@ namespace EJRASync.UI.ViewModels {
 		}
 
 		[RelayCommand]
-		private void RawUpload(LocalFileItem? file) {
-			if (file == null || file.IsDirectory)
+		private async void RawUpload(LocalFileItem? file) {
+			if (file == null)
 				return;
 
+			if (file.IsDirectory) {
+				await ProcessDirectoryForRawUpload(file.FullPath);
+			} else {
+				ProcessFileForRawUpload(file);
+			}
+		}
+
+		private async Task ProcessDirectoryForRawUpload(string directoryPath) {
+			var bucketName = DetermineBucketName(directoryPath);
+			if (string.IsNullOrEmpty(bucketName))
+				return;
+
+			try {
+				// Collect all files from directory and subdirectories
+				var allFiles = await CollectAllFilesFromDirectory(directoryPath);
+				
+				if (!allFiles.Any()) {
+					_mainViewModel.StatusMessage = "No files found in directory";
+					return;
+				}
+
+				var directoryName = Path.GetFileName(directoryPath);
+				_mainViewModel.StatusMessage = $"Adding {allFiles.Count} files from {directoryName} for raw upload...";
+
+				// Process all files in one batch
+				foreach (var file in allFiles) {
+					ProcessFileForRawUpload(file);
+				}
+
+				_mainViewModel.StatusMessage = $"Added {allFiles.Count} files from {directoryName} for raw upload";
+			} catch (Exception ex) {
+				_mainViewModel.StatusMessage = $"Error processing directory {directoryPath}: {ex.Message}";
+			}
+		}
+
+		private void ProcessFileForRawUpload(LocalFileItem file) {
 			var bucketName = DetermineBucketName(file.FullPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -138,10 +206,11 @@ namespace EJRASync.UI.ViewModels {
 				return;
 
 			try {
+				var windowsPath = file.FullPath.Replace('/', '\\');
 				if (file.IsDirectory) {
-					Process.Start("explorer.exe", file.FullPath);
+					Process.Start("explorer.exe", windowsPath);
 				} else {
-					Process.Start("explorer.exe", $"/select,\"{file.FullPath}\"");
+					Process.Start("explorer.exe", $"/select,\"{windowsPath}\"");
 				}
 			} catch (Exception ex) {
 				Console.WriteLine($"Error opening explorer: {ex.Message}");
@@ -151,14 +220,17 @@ namespace EJRASync.UI.ViewModels {
 		private string DetermineBucketName(string filePath) {
 			var basePath = _mainViewModel.NavigationContext.LocalBasePath;
 			var relativePath = Path.GetRelativePath(basePath, filePath);
+			
+			// Normalize path separators to handle both forward and back slashes
+			var normalizedRelativePath = relativePath.Replace('\\', '/');
 
-			if (relativePath.StartsWith("content" + Path.DirectorySeparatorChar + "cars", StringComparison.OrdinalIgnoreCase))
+			if (normalizedRelativePath.StartsWith("content/cars", StringComparison.OrdinalIgnoreCase))
 				return EJRASync.Lib.Constants.CarsBucketName;
-			if (relativePath.StartsWith("content" + Path.DirectorySeparatorChar + "tracks", StringComparison.OrdinalIgnoreCase))
+			if (normalizedRelativePath.StartsWith("content/tracks", StringComparison.OrdinalIgnoreCase))
 				return EJRASync.Lib.Constants.TracksBucketName;
-			if (relativePath.StartsWith("content" + Path.DirectorySeparatorChar + "fonts", StringComparison.OrdinalIgnoreCase))
+			if (normalizedRelativePath.StartsWith("content/fonts", StringComparison.OrdinalIgnoreCase))
 				return EJRASync.Lib.Constants.FontsBucketName;
-			if (relativePath.StartsWith("apps", StringComparison.OrdinalIgnoreCase))
+			if (normalizedRelativePath.StartsWith("apps", StringComparison.OrdinalIgnoreCase))
 				return EJRASync.Lib.Constants.AppsBucketName;
 
 			return null;
@@ -184,6 +256,35 @@ namespace EJRASync.UI.ViewModels {
 			}
 
 			return relativePath.Replace(Path.DirectorySeparatorChar, '/');
+		}
+
+		private async Task<List<LocalFileItem>> CollectAllFilesFromDirectory(string directoryPath) {
+			var allFiles = new List<LocalFileItem>();
+			var directoriesToProcess = new Queue<string>();
+			directoriesToProcess.Enqueue(directoryPath);
+
+			while (directoriesToProcess.Count > 0) {
+				var currentDirectory = directoriesToProcess.Dequeue();
+				
+				try {
+					var items = await _fileService.GetLocalFilesAsync(currentDirectory);
+					
+					// Add all files to the collection
+					var files = items.Where(f => !f.IsDirectory).ToList();
+					allFiles.AddRange(files);
+					
+					// Queue up subdirectories for processing
+					var subdirectories = items.Where(f => f.IsDirectory && f.Name != "..").ToList();
+					foreach (var subdir in subdirectories) {
+						directoriesToProcess.Enqueue(subdir.FullPath);
+					}
+				} catch (Exception ex) {
+					// Log error but continue with other directories
+					Console.WriteLine($"Error processing directory {currentDirectory}: {ex.Message}");
+				}
+			}
+
+			return allFiles;
 		}
 	}
 }

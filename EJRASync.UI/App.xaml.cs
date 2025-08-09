@@ -32,17 +32,34 @@ namespace EJRASync.UI {
 		}
 
 		protected override async void OnStartup(StartupEventArgs e) {
+			// Fetch AWS credentials before configuring services
+			var authApi = new EjraAuthApiService();
+			var tokens = await authApi.GetTokensAsync();
+			
+			string awsAccessKeyId = "";
+			string awsSecretAccessKey = "";
+			string serviceUrl = Constants.R2Url;
+
+			if (tokens?.UserRead != null) {
+				awsAccessKeyId = tokens.UserRead.Aws.AccessKeyId;
+				awsSecretAccessKey = tokens.UserRead.Aws.SecretAccessKey;
+				serviceUrl = tokens.UserRead.S3Url;
+			}
+
 			_host = Host.CreateDefaultBuilder()
 				.ConfigureServices((context, services) => {
-					// Register AWS S3 client
+					// Register AWS S3 client with fetched credentials
 					services.AddSingleton<IAmazonS3>(provider => {
 						var config = new AmazonS3Config {
-							ServiceURL = Constants.MinioUrl,
+							ServiceURL = serviceUrl,
 							ForcePathStyle = true,
-							UseHttp = true // Since it's HTTP, not HTTPS
 						};
-						return new AmazonS3Client("", "", config);
+						return new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, config);
 					});
+
+					// Register auth services
+					services.AddSingleton<IEjraAuthApiService, EjraAuthApiService>();
+					services.AddSingleton<IEjraAuthService, EjraAuthService>();
 
 					// Register services
 					services.AddSingleton<IS3Service, S3Service>();

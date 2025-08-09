@@ -7,7 +7,7 @@
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         mc:Ignorable="d"
         Title="EJRA Sync Manager" Height="800" Width="1400" MinHeight="700" MinWidth="1000"
-        Background="#FAFAFA">
+        Background="#1E1E1E">
     <Window.Resources>
         <!-- Value converters for UI state -->
         <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
@@ -15,13 +15,47 @@
         <local:DateTimeToStringConverter x:Key="DateTimeToStringConverter"/>
         <local:ContextMenuVisibilityConverter x:Key="ContextMenuVisibilityConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <!-- Context Menu Icon Style -->
+        <Style x:Key="ContextMenuIconStyle" TargetType="Image">
+            <Setter Property="Width" Value="16"/>
+            <Setter Property="Height" Value="16"/>
+        </Style>
+
+        <!-- Context Menu Style -->
+        <Style x:Key="{x:Type ContextMenu}" TargetType="{x:Type ContextMenu}">
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="SnapsToDevicePixels" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ContextMenu}">
+                        <Border Background="#2D2D30" CornerRadius="3,3,3,3" BorderBrush="#3E3E42" BorderThickness="2" Opacity="0.96">
+                            <StackPanel ClipToBounds="True" Orientation="Vertical" IsItemsHost="True" Margin="5,4,5,4"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>    
+
+        <ControlTemplate x:Key="{x:Static MenuItem.TopLevelItemTemplateKey}" TargetType="{x:Type MenuItem}">
+            <Border Name="Border" >
+                <Grid>
+                    <ContentPresenter Margin="6,3,6,3" ContentSource="Header" RecognizesAccessKey="True" />
+                </Grid>
+            </Border>
+        </ControlTemplate>
         
         <!-- Define the context menu as a resource -->
-        <ContextMenu x:Key="RemoteFileContextMenu">
+        <ContextMenu x:Key="RemoteFileContextMenu"  Background="#2D2D30" BorderBrush="#3E3E42">
             <MenuItem Header="Tag as Active" 
                      Command="{Binding RemoteFiles.TagAsActiveCommand}"
                      CommandParameter="{Binding RemoteFiles.SelectedFile}"
-                     Icon="✅">
+                     Background="#2D2D30"
+                     Foreground="#F0F0F0"
+                     IsEnabled="{Binding HasWriteAccess}">
+                <MenuItem.Icon>
+                    <Image Source="/Assets/Icons/check-square.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                </MenuItem.Icon>
                 <MenuItem.Style>
                     <Style TargetType="MenuItem">
                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -47,7 +81,12 @@
             <MenuItem Header="Tag as Inactive" 
                      Command="{Binding RemoteFiles.TagAsActiveCommand}"
                      CommandParameter="{Binding RemoteFiles.SelectedFile}"
-                     Icon="❌">
+                     Background="#2D2D30"
+                     Foreground="#F0F0F0"
+                     IsEnabled="{Binding HasWriteAccess}">
+                <MenuItem.Icon>
+                    <Image Source="/Assets/Icons/subtract-square.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                </MenuItem.Icon>
                 <MenuItem.Style>
                     <Style TargetType="MenuItem">
                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -67,14 +106,20 @@
             <MenuItem Header="Delete" 
                      Command="{Binding RemoteFiles.DeleteRemoteFileCommand}"
                      CommandParameter="{Binding RemoteFiles.SelectedFile}"
-                     Icon="🗑️"/>
+                     Background="#2D2D30"
+                     Foreground="#F0F0F0"
+                     IsEnabled="{Binding HasWriteAccess}">
+                <MenuItem.Icon>
+                    <Image Source="/Assets/Icons/delete.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                </MenuItem.Icon>
+            </MenuItem>
         </ContextMenu>
         
         <!-- Modern Button Style -->
         <Style x:Key="ModernButtonStyle" TargetType="Button">
-            <Setter Property="Background" Value="#F3F3F3"/>
-            <Setter Property="Foreground" Value="#202020"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="16,10"/>
             <Setter Property="FontWeight" Value="Normal"/>
@@ -92,16 +137,16 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#E6E6E6"/>
-                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                                <Setter Property="Background" Value="#3E3E42"/>
+                                <Setter Property="BorderBrush" Value="#555"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#DADADA"/>
+                                <Setter Property="Background" Value="#555"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Background" Value="#F5F5F5"/>
-                                <Setter Property="Foreground" Value="#A0A0A0"/>
-                                <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                                <Setter Property="Background" Value="#252526"/>
+                                <Setter Property="Foreground" Value="#6A6A6A"/>
+                                <Setter Property="BorderBrush" Value="#333"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -111,9 +156,9 @@
 
         <!-- Modern TextBox Style -->
         <Style x:Key="ModernTextBoxStyle" TargetType="TextBox">
-            <Setter Property="Background" Value="White"/>
-            <Setter Property="Foreground" Value="#202020"/>
-            <Setter Property="BorderBrush" Value="#E0E0E0"/>
+            <Setter Property="Background" Value="#1E1E1E"/>
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="8,6"/>
             <Setter Property="FontSize" Value="14"/>
@@ -132,10 +177,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="BorderBrush" Value="#D0D0D0"/>
+                                <Setter Property="BorderBrush" Value="#555"/>
                             </Trigger>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="#0078D4"/>
+                                <Setter Property="BorderBrush" Value="#007ACC"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -153,20 +198,135 @@
         </Grid.RowDefinitions>
 
         <!-- Top Bar -->
-        <Border Grid.Row="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
-            <StackPanel Orientation="Horizontal" Margin="20,12" VerticalAlignment="Center">
-                <Button Content="Scan Changes" 
-                        Command="{Binding ScanChangesCommand}" 
+        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1">
+            <Grid Margin="20,12">
+                <Button Command="{Binding ScanChangesCommand}" 
                         Style="{StaticResource ModernButtonStyle}"
-                        Margin="0,0,12,0" />
-                <Button Content="Release" 
-                        IsEnabled="False" 
-                        Style="{StaticResource ModernButtonStyle}" />
-            </StackPanel>
+                        HorizontalAlignment="Left"
+                        Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Assets/Icons/search.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                        <TextBlock Text="Scan Changes" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button IsEnabled="False" 
+                            Style="{StaticResource ModernButtonStyle}"
+                            Margin="0,0,12,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/github.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Release" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <!-- User Profile / Login -->
+                    <Grid VerticalAlignment="Center">
+                        <!-- Login Button (when not logged in) -->
+                        <Button Command="{Binding LoginCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <Image Source="/Assets/Icons/user.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                                <TextBlock Text="Login" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+                        
+                        <!-- User Profile Chip (when logged in) -->
+                        <Button Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
+                                    <Setter Property="Padding" Value="16,4"/>
+                                </Style>
+                            </Button.Style>
+                            <StackPanel Orientation="Horizontal">
+                                <!-- Profile Image -->
+                                <Border Width="24" Height="24" 
+                                        CornerRadius="12" 
+                                        Background="#555"
+                                        Margin="0,0,8,0">
+                                    <Grid>
+                                        <!-- Default user icon when no profile image -->
+                                        <Image Source="/Assets/Icons/user.png" 
+                                               Width="14" Height="14"
+                                               HorizontalAlignment="Center" 
+                                               VerticalAlignment="Center"
+                                               Opacity="0.7"/>
+                                        <!-- Actual profile image when available -->
+                                        <Image Source="{Binding UserProfileImageUrl}"
+                                               Width="24" Height="24"
+                                               Stretch="UniformToFill"
+                                               HorizontalAlignment="Center" 
+                                               VerticalAlignment="Center">
+                                            <Image.Clip>
+                                                <EllipseGeometry RadiusX="12" RadiusY="12" Center="12,12"/>
+                                            </Image.Clip>
+                                        </Image>
+                                    </Grid>
+                                </Border>
+                                
+                                <!-- User Info -->
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding UserDisplayName}" 
+                                               FontSize="13" 
+                                               FontWeight="SemiBold"
+                                               Foreground="#F0F0F0"
+                                               Margin="0,0,0,1"/>
+                                    <TextBlock Text="{Binding UserProviderName}" 
+                                               FontSize="11" 
+                                               Foreground="#AAAAAA"/>
+                                </StackPanel>
+                                
+                                <!-- Logout Button -->
+                                <Button Command="{Binding LogoutCommand}"
+                                        Background="Transparent"
+                                        BorderThickness="0"
+                                        Padding="4"
+                                        Margin="8,0,0,0"
+                                        ToolTip="Logout">
+                                    <Image Source="/Assets/Icons/logout.png" Width="14" Height="14" Opacity="0.7"/>
+                                    <Button.Style>
+                                        <Style TargetType="Button">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="10"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Background" Value="#3E3E42"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter Property="Background" Value="#555"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- Path Navigation Bars -->
-        <Border Grid.Row="1" Background="#F8F8F8" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1">
+        <Border Grid.Row="1" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,0,0,1">
             <Grid Margin="20,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -182,9 +342,9 @@
                 
                 <!-- Labels -->
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Local Directory" 
-                           FontWeight="SemiBold" FontSize="13" Foreground="#404040" Margin="4,0"/>
+                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"/>
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Remote Storage" 
-                           FontWeight="SemiBold" FontSize="13" Foreground="#404040" Margin="4,0"/>
+                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"/>
                 
                 <!-- Path TextBoxes -->
                 <TextBox Grid.Row="2" Grid.Column="0" 
@@ -208,7 +368,7 @@
             </Grid.ColumnDefinitions>
             
             <!-- Local File List -->
-            <Border Grid.Column="0" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+            <Border Grid.Column="0" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -229,60 +389,93 @@
                              CanUserDeleteRows="False"
                              CanUserReorderColumns="False"
                              CanUserResizeRows="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="False"
                              IsEnabled="{Binding LocalFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
                              Opacity="{Binding LocalFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
-                             Background="White"
+                             Background="#1E1E1E"
                              BorderThickness="0"
                              RowHeight="24"
                              FontSize="13"
                              Margin="0,0,0,4" ColumnHeaderHeight="30">
+                        
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="#2D2D30"/>
+                                <Setter Property="Foreground" Value="#F0F0F0"/>
+                                <Setter Property="BorderBrush" Value="#3E3E42"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
 
                         <DataGrid.CellStyle>
                             <Style TargetType="DataGridCell">
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="#F0F0F0"/>
                             </Style>
                         </DataGrid.CellStyle>
 
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="#1E1E1E"/>
                                 <Setter Property="BorderThickness" Value="1"/>
                                 <Setter Property="BorderBrush" Value="Transparent"/>
                                 <Style.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#E3F2FD"/>
-                                        <Setter Property="BorderBrush" Value="#2196F3"/>
+                                        <Setter Property="Background" Value="#094771"/>
+                                        <Setter Property="BorderBrush" Value="#007ACC"/>
                                     </Trigger>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#F0F8FF"/>
+                                        <Setter Property="Background" Value="#2A2D2E"/>
                                     </Trigger>
                                     <MultiTrigger>
                                         <MultiTrigger.Conditions>
                                             <Condition Property="IsSelected" Value="True"/>
                                             <Condition Property="IsMouseOver" Value="True"/>
                                         </MultiTrigger.Conditions>
-                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                        <Setter Property="BorderBrush" Value="#1976D2"/>
+                                        <Setter Property="Background" Value="#1177BB"/>
+                                        <Setter Property="BorderBrush" Value="#007ACC"/>
                                     </MultiTrigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
 
                         <DataGrid.ContextMenu>
-                            <ContextMenu>
+                            <ContextMenu  Background="#2D2D30" BorderBrush="#3E3E42">
                                 <MenuItem Header="Compress &amp; upload" 
                                          Command="{Binding LocalFiles.CompressAndUploadCommand}"
                                          CommandParameter="{Binding LocalFiles.SelectedFile}"
-                                         Icon="📦"/>
+                                         Background="#2D2D30"
+                                         Foreground="#F0F0F0"
+                                         IsEnabled="{Binding HasWriteAccess}">
+                                    <MenuItem.Icon>
+                                        <Image Source="/Assets/Icons/upload-box.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem Header="Raw upload" 
                                          Command="{Binding LocalFiles.RawUploadCommand}"
                                          CommandParameter="{Binding LocalFiles.SelectedFile}"
-                                         Icon="🔼"/>
-                                <Separator/>
+                                         Background="#2D2D30"
+                                         Foreground="#F0F0F0"
+                                         IsEnabled="{Binding HasWriteAccess}">
+                                    <MenuItem.Icon>
+                                        <Image Source="/Assets/Icons/upload-file.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Background="#3E3E42"/>
                                 <MenuItem Header="Show in Explorer" 
                                          Command="{Binding LocalFiles.ViewInExplorerCommand}"
                                          CommandParameter="{Binding LocalFiles.SelectedFile}"
-                                         Icon="📁"/>
+                                         Background="#2D2D30"
+                                         Foreground="#F0F0F0">
+                                    <MenuItem.Icon>
+                                        <Image Source="/Assets/Icons/folder.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
                             </ContextMenu>
                         </DataGrid.ContextMenu>
 
@@ -325,7 +518,7 @@
             </Border>
 
             <!-- Remote File List -->
-            <Border Grid.Column="2" Background="White" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+            <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -346,18 +539,33 @@
                              CanUserDeleteRows="False"
                              CanUserReorderColumns="False"
                              CanUserResizeRows="False"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             ScrollViewer.CanContentScroll="False"
                              IsEnabled="{Binding RemoteFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
                              Opacity="{Binding RemoteFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
-                             Background="White"
+                             Background="#1E1E1E"
                              BorderThickness="0"
                              RowHeight="24"
                              FontSize="13"
                              Margin="0,0,0,4" ColumnHeaderHeight="30">
                         
+                        <DataGrid.ColumnHeaderStyle>
+                            <Style TargetType="DataGridColumnHeader">
+                                <Setter Property="Background" Value="#2D2D30"/>
+                                <Setter Property="Foreground" Value="#F0F0F0"/>
+                                <Setter Property="BorderBrush" Value="#3E3E42"/>
+                                <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Style>
+                        </DataGrid.ColumnHeaderStyle>
+                        
                         <DataGrid.CellStyle>
                             <Style TargetType="DataGridCell">
                                 <Setter Property="BorderThickness" Value="0"/>
                                 <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Foreground" Value="#F0F0F0"/>
                             </Style>
                         </DataGrid.CellStyle>
 
@@ -373,25 +581,25 @@
                                     
                                     <!-- Active items -->
                                     <DataTrigger Binding="{Binding IsActive}" Value="True">
-                                        <Setter Property="Background" Value="#E8F5E8"/>
+                                        <Setter Property="Background" Value="#2D4A2D"/>
                                     </DataTrigger>
                                     
                                     <!-- Inactive items -->
                                     <DataTrigger Binding="{Binding IsActive}" Value="False">
-                                        <Setter Property="Background" Value="#FFEBEE"/>
+                                        <Setter Property="Background" Value="#4A2D2D"/>
                                         <Setter Property="Opacity" Value="0.7"/>
                                     </DataTrigger>
                                     
                                     <!-- Selection - higher priority than IsActive -->
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter Property="Background" Value="#E3F2FD"/>
-                                        <Setter Property="BorderBrush" Value="#2196F3"/>
+                                        <Setter Property="Background" Value="#094771"/>
+                                        <Setter Property="BorderBrush" Value="#007ACC"/>
                                         <Setter Property="Opacity" Value="1.0"/>
                                     </Trigger>
                                     
                                     <!-- Hover effect -->
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#F0F8FF"/>
+                                        <Setter Property="Background" Value="#2A2D2E"/>
                                         <Setter Property="Opacity" Value="1.0"/>
                                     </Trigger>
                                     
@@ -401,8 +609,8 @@
                                             <Condition Property="IsSelected" Value="True"/>
                                             <Condition Property="IsMouseOver" Value="True"/>
                                         </MultiTrigger.Conditions>
-                                        <Setter Property="Background" Value="#BBDEFB"/>
-                                        <Setter Property="BorderBrush" Value="#1976D2"/>
+                                        <Setter Property="Background" Value="#1177BB"/>
+                                        <Setter Property="BorderBrush" Value="#007ACC"/>
                                         <Setter Property="Opacity" Value="1.0"/>
                                     </MultiTrigger>
                                 </Style.Triggers>
@@ -477,21 +685,30 @@
         </Grid>
 
         <!-- Action Buttons -->
-        <Border Grid.Row="3" Background="#F8F8F8" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+        <Border Grid.Row="3" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,1,0,0">
             <StackPanel Orientation="Horizontal" 
                        HorizontalAlignment="Right" 
                        Margin="20,16">
-                <Button Content="{Binding ViewChangesButtonText}" 
-                        Command="{Binding ViewChangesCommand}" 
+                <Button Command="{Binding ViewChangesCommand}" 
                         Style="{StaticResource ModernButtonStyle}"
-                        Margin="0,0,12,0" />
-                <Button Content="Discard" 
-                        Command="{Binding DiscardChangesCommand}" 
-                        Style="{StaticResource ModernButtonStyle}"
-                        Background="#FFEBEE"
-                        Foreground="#C62828"
-                        BorderBrush="#FFCDD2"
                         Margin="0,0,12,0">
+                    <StackPanel Orientation="Horizontal">
+                        <Image Source="/Assets/Icons/bullet-list.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                        <TextBlock Text="{Binding ViewChangesButtonText}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding DiscardChangesCommand}" 
+                        Style="{StaticResource ModernButtonStyle}"
+                        Background="#4A2D2D"
+                        Foreground="#FF6B6B"
+                        BorderBrush="#6B3A3A"
+                        Margin="0,0,12,0">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/recycle.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Discard" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button.Content>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border Background="{TemplateBinding Background}"
@@ -504,27 +721,32 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#FFCDD2"/>
-                                    <Setter Property="BorderBrush" Value="#EF9A9A"/>
+                                    <Setter Property="Background" Value="#6B3A3A"/>
+                                    <Setter Property="BorderBrush" Value="#8B4A4A"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter Property="Background" Value="#EF9A9A"/>
+                                    <Setter Property="Background" Value="#8B4A4A"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Background" Value="#F5F5F5"/>
-                                    <Setter Property="Foreground" Value="#A0A0A0"/>
-                                    <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                                    <Setter Property="Background" Value="#252526"/>
+                                    <Setter Property="Foreground" Value="#6A6A6A"/>
+                                    <Setter Property="BorderBrush" Value="#333"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
-                <Button Content="Apply Changes" 
-                        Command="{Binding ApplyChangesCommand}" 
+                <Button Command="{Binding ApplyChangesCommand}" 
                         Style="{StaticResource ModernButtonStyle}"
-                        Background="#E8F5E8"
-                        Foreground="#2E7D32"
-                        BorderBrush="#C8E6C9">
+                        Background="#2D4A2D"
+                        Foreground="#4CAF50"
+                        BorderBrush="#3A5A3A">
+                    <Button.Content>
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/check.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Apply Changes" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button.Content>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border Background="{TemplateBinding Background}"
@@ -537,16 +759,16 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#C8E6C9"/>
-                                    <Setter Property="BorderBrush" Value="#A5D6A7"/>
+                                    <Setter Property="Background" Value="#3A5A3A"/>
+                                    <Setter Property="BorderBrush" Value="#4A6A4A"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter Property="Background" Value="#A5D6A7"/>
+                                    <Setter Property="Background" Value="#4A6A4A"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Background" Value="#F5F5F5"/>
-                                    <Setter Property="Foreground" Value="#A0A0A0"/>
-                                    <Setter Property="BorderBrush" Value="#E8E8E8"/>
+                                    <Setter Property="Background" Value="#252526"/>
+                                    <Setter Property="Foreground" Value="#6A6A6A"/>
+                                    <Setter Property="BorderBrush" Value="#333"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -556,7 +778,7 @@
         </Border>
 
         <!-- Status Bar -->
-        <Border Grid.Row="4" Background="#F8F9FA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0">
+        <Border Grid.Row="4" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,1,0,0">
             <Grid Height="36" Margin="20,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -567,15 +789,15 @@
                           Text="{Binding StatusMessage}" 
                           VerticalAlignment="Center"
                           FontSize="13"
-                          Foreground="#404040"/>
+                          Foreground="#F0F0F0"/>
                 
                 <ProgressBar Grid.Column="1" 
                             Value="{Binding ProgressValue}" 
                             Maximum="100" 
                             Height="6" 
                             VerticalAlignment="Center"
-                            Background="#E0E0E0"
-                            Foreground="#0078D4"
+                            Background="#3E3E42"
+                            Foreground="#F0F0F0"
                             BorderThickness="0"
                             Visibility="Visible">
                     <ProgressBar.Template>

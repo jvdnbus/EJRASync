@@ -25,7 +25,7 @@ class CLI {
 		});
 
 		var s3Client = new AmazonS3Client("", "", new AmazonS3Config {
-			ServiceURL = Constants.MinioUrl,
+			ServiceURL = Constants.R2Url,
 			ForcePathStyle = true,
 		});
 

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <Content Include="Assets\ejra-icon.ico" />
+    <Resource Include="Assets\Icons\*.png" />
   </ItemGroup>
 
   <ItemGroup>
