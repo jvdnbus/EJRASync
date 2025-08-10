@@ -15,6 +15,101 @@
         <local:DateTimeToStringConverter x:Key="DateTimeToStringConverter"/>
         <local:ContextMenuVisibilityConverter x:Key="ContextMenuVisibilityConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        
+        <!-- Dark ScrollBar Styles -->
+        <Style x:Key="DarkScrollBarThumb" TargetType="{x:Type Thumb}">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="2"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter Property="Background" Value="#666"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollBarVertical" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Width" Value="5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid>
+                            <Rectangle Fill="{TemplateBinding Background}"/>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource DarkScrollBarThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollBarHorizontal" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Height" Value="5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid>
+                            <Rectangle Fill="{TemplateBinding Background}"/>
+                            <Track x:Name="PART_Track">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource DarkScrollBarThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollViewer" TargetType="{x:Type ScrollViewer}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollContentPresenter Grid.Column="0" Grid.Row="0"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" 
+                                       Grid.Column="1" Grid.Row="0"
+                                       Style="{StaticResource DarkScrollBarVertical}"
+                                       Orientation="Vertical"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                            <ScrollBar x:Name="PART_HorizontalScrollBar"
+                                       Grid.Column="0" Grid.Row="1"
+                                       Style="{StaticResource DarkScrollBarHorizontal}"
+                                       Orientation="Horizontal"
+                                       Value="{TemplateBinding HorizontalOffset}"
+                                       Maximum="{TemplateBinding ScrollableWidth}"
+                                       ViewportSize="{TemplateBinding ViewportWidth}"
+                                       Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
         <!-- Context Menu Icon Style -->
         <Style x:Key="ContextMenuIconStyle" TargetType="Image">
@@ -399,6 +494,11 @@
                              FontSize="13"
                              Margin="0,0,0,4" ColumnHeaderHeight="30">
                         
+                        <DataGrid.Resources>
+                            <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
+                            <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBarVertical}"/>
+                        </DataGrid.Resources>
+                        
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="#2D2D30"/>
@@ -549,6 +649,11 @@
                              FontSize="13"
                              Margin="0,0,0,4" ColumnHeaderHeight="30">
                         
+                        <DataGrid.Resources>
+                            <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
+                            <Style TargetType="ScrollBar" BasedOn="{StaticResource DarkScrollBarVertical}"/>
+                        </DataGrid.Resources>
+                        
                         <DataGrid.ColumnHeaderStyle>
                             <Style TargetType="DataGridColumnHeader">
                                 <Setter Property="Background" Value="#2D2D30"/>
@@ -571,6 +676,7 @@
 
                         <DataGrid.RowStyle>
                             <Style TargetType="DataGridRow">
+                                <Setter Property="Background" Value="#1E1E1E"/>
                                 <Setter Property="BorderThickness" Value="1"/>
                                 <Setter Property="BorderBrush" Value="Transparent"/>
                                 <Style.Triggers>
@@ -590,6 +696,11 @@
                                         <Setter Property="Opacity" Value="0.7"/>
                                     </DataTrigger>
                                     
+                                    <!-- Pending changes - highest priority -->
+                                    <DataTrigger Binding="{Binding IsPendingChange}" Value="True">
+                                        <Setter Property="Background" Value="#4A3500"/>
+                                    </DataTrigger>
+                                    
                                     <!-- Selection - higher priority than IsActive -->
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter Property="Background" Value="#094771"/>
@@ -604,15 +715,11 @@
                                     </Trigger>
                                     
                                     <!-- Selected + Hover -->
-                                    <MultiTrigger>
-                                        <MultiTrigger.Conditions>
-                                            <Condition Property="IsSelected" Value="True"/>
-                                            <Condition Property="IsMouseOver" Value="True"/>
-                                        </MultiTrigger.Conditions>
+                                    <Trigger Property="IsSelected" Value="True">
                                         <Setter Property="Background" Value="#1177BB"/>
                                         <Setter Property="BorderBrush" Value="#007ACC"/>
                                         <Setter Property="Opacity" Value="1.0"/>
-                                    </MultiTrigger>
+                                    </Trigger>
                                 </Style.Triggers>
                             </Style>
                         </DataGrid.RowStyle>
@@ -650,6 +757,17 @@
                             </DataGridTextColumn>
                             
                             <DataGridTemplateColumn Header="C" Width="30">
+                                <DataGridTemplateColumn.HeaderStyle>
+                                    <Style TargetType="DataGridColumnHeader">
+                                        <Setter Property="Background" Value="#2D2D30"/>
+                                        <Setter Property="Foreground" Value="#F0F0F0"/>
+                                        <Setter Property="BorderBrush" Value="#3E3E42"/>
+                                        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+                                        <Setter Property="Padding" Value="8,6"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                        <Setter Property="ToolTip" Value="Compressed"/>
+                                    </Style>
+                                </DataGridTemplateColumn.HeaderStyle>
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="Bold" Margin="8,0">
@@ -669,6 +787,17 @@
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>
+                            
+                            <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="100" IsReadOnly="True">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                        <Setter Property="Margin" Value="8,0"/>
+                                        <Setter Property="FontStyle" Value="Italic"/>
+                                        <Setter Property="Foreground" Value="#FFA500"/>
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                             
                             <DataGridTextColumn Header="Modified" Binding="{Binding LastModified, Converter={StaticResource DateTimeToStringConverter}, ConverterParameter='yyyy-MM-dd HH:mm'}" Width="130" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
@@ -698,10 +827,13 @@
                     </StackPanel>
                 </Button>
                 <Button Command="{Binding DiscardChangesCommand}" 
-                        Style="{StaticResource ModernButtonStyle}"
                         Background="#4A2D2D"
                         Foreground="#FF6B6B"
                         BorderBrush="#6B3A3A"
+                        BorderThickness="1"
+                        Padding="16,10"
+                        FontWeight="Normal"
+                        FontSize="13"
                         Margin="0,0,12,0">
                     <Button.Content>
                         <StackPanel Orientation="Horizontal">
@@ -711,7 +843,8 @@
                     </Button.Content>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}"
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="4">
@@ -721,26 +854,29 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#6B3A3A"/>
-                                    <Setter Property="BorderBrush" Value="#8B4A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#7B4A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#9B5A5A"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter Property="Background" Value="#8B4A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#5B2A2A"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Background" Value="#252526"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
                                     <Setter Property="Foreground" Value="#6A6A6A"/>
-                                    <Setter Property="BorderBrush" Value="#333"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Button.Template>
                 </Button>
                 <Button Command="{Binding ApplyChangesCommand}" 
-                        Style="{StaticResource ModernButtonStyle}"
                         Background="#2D4A2D"
                         Foreground="#4CAF50"
-                        BorderBrush="#3A5A3A">
+                        BorderBrush="#3A5A3A"
+                        BorderThickness="1"
+                        Padding="16,10"
+                        FontWeight="Normal"
+                        FontSize="13">
                     <Button.Content>
                         <StackPanel Orientation="Horizontal">
                             <Image Source="/Assets/Icons/check.png" Width="16" Height="16" Margin="0,0,8,0"/>
@@ -749,7 +885,8 @@
                     </Button.Content>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
-                            <Border Background="{TemplateBinding Background}"
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     CornerRadius="4">
@@ -759,16 +896,16 @@
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter Property="Background" Value="#3A5A3A"/>
-                                    <Setter Property="BorderBrush" Value="#4A6A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#4A6A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#5A7A5A"/>
                                 </Trigger>
                                 <Trigger Property="IsPressed" Value="True">
-                                    <Setter Property="Background" Value="#4A6A4A"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#1D3A1D"/>
                                 </Trigger>
                                 <Trigger Property="IsEnabled" Value="False">
-                                    <Setter Property="Background" Value="#252526"/>
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
                                     <Setter Property="Foreground" Value="#6A6A6A"/>
-                                    <Setter Property="BorderBrush" Value="#333"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>
@@ -782,6 +919,7 @@
             <Grid Height="36" Margin="20,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="200"/>
                 </Grid.ColumnDefinitions>
                 
@@ -790,8 +928,43 @@
                           VerticalAlignment="Center"
                           FontSize="13"
                           Foreground="#F0F0F0"/>
-                
-                <ProgressBar Grid.Column="1" 
+
+                <Button Grid.Column="1" 
+                        Command="{Binding CancelApplyChangesCommand}"
+                        Background="#3E3E42"
+                        Foreground="#CCCCCC"
+                        BorderBrush="#555555"
+                        BorderThickness="1"
+                        Width="24"
+                        Height="24"
+                        Margin="8,0,8,0"
+                        ToolTip="Cancel operation"
+                        Visibility="{Binding IsApplying, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Image Source="/Assets/Icons/delete.png" Width="12" Height="12"/>
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="ButtonBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="12">
+                                <ContentPresenter HorizontalAlignment="Center" 
+                                                VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#555555"/>
+                                    <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#777777"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="ButtonBorder" Property="Background" Value="#2A2A2A"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <ProgressBar Grid.Column="2" 
                             Value="{Binding ProgressValue}" 
                             Maximum="100" 
                             Height="6" 
@@ -799,7 +972,8 @@
                             Background="#3E3E42"
                             Foreground="#F0F0F0"
                             BorderThickness="0"
-                            Visibility="Visible">
+                            Visibility="Visible"
+                            IsIndeterminate="{Binding IsProgressIndeterminate}">
                     <ProgressBar.Template>
                         <ControlTemplate TargetType="ProgressBar">
                             <Border Background="{TemplateBinding Background}" 

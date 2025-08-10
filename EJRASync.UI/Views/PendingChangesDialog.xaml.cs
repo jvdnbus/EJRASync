@@ -6,7 +6,6 @@ using System.Windows.Interop;
 
 namespace EJRASync.UI.Views {
 	public partial class PendingChangesDialog : Window {
-		public string Title { get; set; } = "Pending Changes";
 		public ObservableCollection<PendingChange> PendingChanges { get; set; }
 
 		// Windows API for dark title bar
@@ -18,11 +17,13 @@ namespace EJRASync.UI.Views {
 
 		public PendingChangesDialog(ObservableCollection<PendingChange> pendingChanges) {
 			PendingChanges = pendingChanges;
-			Title = $"Pending Changes ({pendingChanges.Count} items)";
 
 			InitializeComponent();
 			DataContext = this;
 			SourceInitialized += OnSourceInitialized;
+			
+			// Set the window title after InitializeComponent
+			Title = $"Pending Changes ({pendingChanges.Count} items)";
 		}
 
 		private void OnSourceInitialized(object sender, EventArgs e) {

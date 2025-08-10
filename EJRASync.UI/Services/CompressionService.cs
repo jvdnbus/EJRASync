@@ -6,35 +6,58 @@ namespace EJRASync.UI.Services {
 		private static readonly HashSet<string> CompressibleExtensions = new(StringComparer.OrdinalIgnoreCase)
 		{
 			".dds", ".png", ".jpg", ".jpeg", ".bmp", ".tga",
-			".ini", ".txt", ".cfg", ".json", ".xml", ".yaml", ".yml",
-			".kn5", ".fbx", ".obj", ".lua"
+			".ini", ".txt", ".cfg", ".json", ".xml", ".yaml", ".yml", ".lut", ".csv",
+			".fbx", ".obj", ".lua", ".ttf", ".bank", ".ai", ".bin", ".py",
+			".acd", ".knh", ".kn5", ".ksanim", ".vao-patch"
 		};
 
 		private const long MinCompressionSize = 1024; // Don't compress files smaller than 1KB
 		private const int CompressionLevel = 3; // Balanced compression level
 
-		public async Task<byte[]> CompressFileAsync(string filePath, IProgress<int>? progress = null) {
-			var data = await File.ReadAllBytesAsync(filePath);
-			return await CompressDataAsync(data, progress);
-		}
-
-		public async Task<byte[]> CompressDataAsync(byte[] data, IProgress<int>? progress = null) {
-			return await Task.Run(() => {
+		public async Task<string> CompressFileAsync(string inputFilePath, IProgress<int>? progress = null) {
+			var tempCompressedFile = Path.GetTempFileName();
+			
+			await Task.Run(() => {
 				progress?.Report(0);
-				using var compressor = new Compressor(CompressionLevel);
-				var compressed = compressor.Wrap(data).ToArray();
+				
+				using var inputStream = File.OpenRead(inputFilePath);
+				using var outputStream = File.OpenWrite(tempCompressedFile);
+				using var compressionStream = new CompressionStream(outputStream, CompressionLevel);
+				
+				inputStream.CopyTo(compressionStream);
 				progress?.Report(100);
-				return compressed;
 			});
+			
+			return tempCompressedFile;
 		}
 
-		public async Task<byte[]> DecompressDataAsync(byte[] compressedData, IProgress<int>? progress = null) {
-			return await Task.Run(() => {
+		public async Task<string> CompressDataAsync(byte[] data, IProgress<int>? progress = null) {
+			var tempCompressedFile = Path.GetTempFileName();
+			
+			await Task.Run(() => {
 				progress?.Report(0);
-				using var decompressor = new Decompressor();
-				var decompressed = decompressor.Unwrap(compressedData).ToArray();
+				
+				using var inputStream = new MemoryStream(data);
+				using var outputStream = new FileStream(tempCompressedFile, FileMode.Create, FileAccess.Write);
+				using var compressionStream = new CompressionStream(outputStream, CompressionLevel);
+				
+				inputStream.CopyTo(compressionStream);
 				progress?.Report(100);
-				return decompressed;
+			});
+			
+			return tempCompressedFile;
+		}
+
+		public async Task DecompressFileAsync(string inputFilePath, string outputFilePath, IProgress<int>? progress = null) {
+			await Task.Run(() => {
+				progress?.Report(0);
+				
+				using var inputStream = File.OpenRead(inputFilePath);
+				using var outputStream = File.OpenWrite(outputFilePath);
+				using var decompressionStream = new DecompressionStream(inputStream);
+				
+				decompressionStream.CopyTo(outputStream);
+				progress?.Report(100);
 			});
 		}
 

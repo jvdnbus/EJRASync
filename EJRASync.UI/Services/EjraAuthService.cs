@@ -5,13 +5,21 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Net;
 using System.Text;
+using System.IO;
 
 namespace EJRASync.UI.Services {
 	public class EjraAuthService : IEjraAuthService {
 		private readonly HttpClient _httpClient;
+		private readonly string _tokenFilePath;
 
 		public EjraAuthService() {
 			_httpClient = new HttpClient();
+			
+			// Store token in the user's AppData folder
+			var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+			var appFolder = Path.Combine(appDataPath, "EJRASync");
+			Directory.CreateDirectory(appFolder);
+			_tokenFilePath = Path.Combine(appFolder, "oauth_token.json");
 		}
 
 		public async Task<OAuthToken?> AuthenticateAsync() {
@@ -208,6 +216,56 @@ namespace EJRASync.UI.Services {
 			}
 
 			return result;
+		}
+
+		public async Task SaveTokenAsync(OAuthToken token) {
+			try {
+				var jsonOptions = new JsonSerializerOptions {
+					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+					PropertyNameCaseInsensitive = true,
+					WriteIndented = true
+				};
+				
+				var json = JsonSerializer.Serialize(token, jsonOptions);
+				await File.WriteAllTextAsync(_tokenFilePath, json);
+			}
+			catch (Exception ex) {
+				SentrySdk.CaptureException(ex);
+			}
+		}
+
+		public async Task<OAuthToken?> LoadSavedTokenAsync() {
+			try {
+				if (!File.Exists(_tokenFilePath))
+					return null;
+
+				var json = await File.ReadAllTextAsync(_tokenFilePath);
+				if (string.IsNullOrWhiteSpace(json))
+					return null;
+
+				var jsonOptions = new JsonSerializerOptions {
+					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+					PropertyNameCaseInsensitive = true
+				};
+
+				var token = JsonSerializer.Deserialize<OAuthToken>(json, jsonOptions);
+				return token;
+			}
+			catch (Exception ex) {
+				SentrySdk.CaptureException(ex);
+				return null;
+			}
+		}
+
+		public async Task ClearSavedTokenAsync() {
+			try {
+				if (File.Exists(_tokenFilePath)) {
+					File.Delete(_tokenFilePath);
+				}
+			}
+			catch (Exception ex) {
+				SentrySdk.CaptureException(ex);
+			}
 		}
 	}
 }

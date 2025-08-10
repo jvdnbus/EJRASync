@@ -6,6 +6,7 @@ using EJRASync.UI.Utils;
 using EJRASync.UI.ViewModels;
 using System.Collections.ObjectModel;
 using System.IO;
+using System.Windows;
 
 namespace EJRASync.UI {
 	public partial class MainWindowViewModel : ObservableObject {
@@ -29,10 +30,16 @@ namespace EJRASync.UI {
 		private double _progressValue = 0;
 
 		[ObservableProperty]
+		private bool _isProgressIndeterminate = false;
+
+		[ObservableProperty]
 		private bool _isScanning = false;
 
 		[ObservableProperty]
 		private bool _isApplying = false;
+
+		[ObservableProperty]
+		private bool _isCancelling = false;
 
 		[ObservableProperty]
 		private bool _hasWriteAccess = false;
@@ -50,6 +57,8 @@ namespace EJRASync.UI {
 		private string? _userProviderName;
 
 		private OAuthToken? _currentOAuthToken;
+		private EJRASync.UI.Views.PendingChangesDialog? _pendingChangesDialog;
+		private CancellationTokenSource? _applyChangesCancellationTokenSource;
 
 		public LocalFileListViewModel LocalFiles { get; }
 		public RemoteFileListViewModel RemoteFiles { get; }
@@ -81,7 +90,27 @@ namespace EJRASync.UI {
 		public async Task InitializeAsync() {
 			await _contentStatusService.InitializeAsync();
 			await LocalFiles.LoadFilesAsync(NavigationContext.LocalCurrentPath);
-			await CheckWriteAccessAsync();
+			
+			// Try auto-login with saved token
+			await TryAutoLoginAsync();
+		}
+
+		private async Task TryAutoLoginAsync() {
+			try {
+				var savedToken = await _authService.LoadSavedTokenAsync();
+				if (savedToken != null && !savedToken.IsExpired()) {
+					await LoginWithTokenAsync(savedToken, "Auto-login successful!");
+					// Don't call CheckWriteAccessAsync after successful auto-login
+					return;
+				} else {
+					// No valid saved token, check for basic read access
+					await CheckWriteAccessAsync();
+				}
+			}
+			catch (Exception ex) {
+				// If auto-login fails, just check for basic access
+				await CheckWriteAccessAsync();
+			}
 		}
 
 		private async Task CheckWriteAccessAsync() {
@@ -106,6 +135,9 @@ namespace EJRASync.UI {
 				ViewChangesCommand.NotifyCanExecuteChanged();
 				DiscardChangesCommand.NotifyCanExecuteChanged();
 				ApplyChangesCommand.NotifyCanExecuteChanged();
+				
+				// Update dialog title if it's open
+				UpdatePendingChangesDialogTitle();
 
 				var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName, EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
 				var localFolders = new[] { "content/cars", "content/tracks", "content/fonts", "apps" };
@@ -123,6 +155,15 @@ namespace EJRASync.UI {
 				}
 
 				StatusMessage = $"Found {PendingChanges.Count} changes";
+				
+				// Update UI after scanning is complete
+				OnPropertyChanged(nameof(ViewChangesButtonText));
+				ViewChangesCommand.NotifyCanExecuteChanged();
+				DiscardChangesCommand.NotifyCanExecuteChanged();
+				ApplyChangesCommand.NotifyCanExecuteChanged();
+				
+				// Update remote file list preview
+				RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
 			} catch (Exception ex) {
 				StatusMessage = $"Error scanning: {ex.Message}";
 			} finally {
@@ -169,17 +210,36 @@ namespace EJRASync.UI {
 				BucketName = bucketName,
 				FileSizeBytes = localFile.SizeBytes
 			});
+			
+			// Update UI commands whenever changes are added
+			OnPropertyChanged(nameof(ViewChangesButtonText));
+			ViewChangesCommand.NotifyCanExecuteChanged();
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+			ApplyChangesCommand.NotifyCanExecuteChanged();
 		}
 
 		private bool CanScanChanges() => !IsScanning && !IsApplying;
 
 		[RelayCommand(CanExecute = nameof(CanViewChanges))]
 		private void ViewChanges() {
-			var dialog = new EJRASync.UI.Views.PendingChangesDialog(PendingChanges);
-			dialog.ShowDialog();
+			// If dialog is already open, just bring it to front
+			if (_pendingChangesDialog != null) {
+				_pendingChangesDialog.Activate();
+				_pendingChangesDialog.Focus();
+				return;
+			}
+
+			// Create new dialog instance
+			_pendingChangesDialog = new EJRASync.UI.Views.PendingChangesDialog(PendingChanges);
+			_pendingChangesDialog.Owner = Application.Current.MainWindow;
+			
+			// Handle when dialog is closed to clear the reference
+			_pendingChangesDialog.Closed += (s, e) => _pendingChangesDialog = null;
+			
+			_pendingChangesDialog.Show();
 		}
 
-		private bool CanViewChanges() => PendingChanges.Count > 0 && HasWriteAccess;
+		private bool CanViewChanges() => PendingChanges.Count > 0;
 
 		[RelayCommand(CanExecute = nameof(CanDiscardChanges))]
 		private void DiscardChanges() {
@@ -188,10 +248,17 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+			
+			// Update dialog title if it's open
+			UpdatePendingChangesDialogTitle();
+			
+			// Clear remote file list preview
+			RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
+			
 			StatusMessage = "Changes discarded";
 		}
 
-		private bool CanDiscardChanges() => PendingChanges.Count > 0 && HasWriteAccess;
+		private bool CanDiscardChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
 
 		[RelayCommand(CanExecute = nameof(CanApplyChanges))]
 		private async Task ApplyChangesAsync() {
@@ -199,23 +266,33 @@ namespace EJRASync.UI {
 			StatusMessage = "Applying changes...";
 			ProgressValue = 0;
 
+			_applyChangesCancellationTokenSource = new CancellationTokenSource();
+			CancelApplyChangesCommand.NotifyCanExecuteChanged();
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+
 			try {
 				var totalChanges = PendingChanges.Count;
 				var processedChanges = 0;
 
 				var parallelOptions = new ParallelOptions {
-					MaxDegreeOfParallelism = Environment.ProcessorCount
+					MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
+					CancellationToken = _applyChangesCancellationTokenSource.Token
 				};
 
 				await Parallel.ForEachAsync(PendingChanges, parallelOptions, async (change, ct) => {
 					try {
-						await ProcessChangeAsync(change);
+						ct.ThrowIfCancellationRequested();
+						await ProcessChangeAsync(change, ct);
+					} catch (OperationCanceledException) {
+						// Cancel
 					} catch (Exception ex) {
 						Console.WriteLine($"Error processing {change.Description}: {ex.Message}");
 					} finally {
 						Interlocked.Increment(ref processedChanges);
-						ProgressValue = processedChanges * 100.0 / totalChanges;
-						StatusMessage = $"Processing {processedChanges} of {totalChanges}...";
+						if (!IsCancelling) {
+							ProgressValue = processedChanges * 100.0 / totalChanges;
+							StatusMessage = $"({processedChanges}/{totalChanges}) {change.Description}...";
+						}
 					}
 				});
 
@@ -224,87 +301,131 @@ namespace EJRASync.UI {
 				ViewChangesCommand.NotifyCanExecuteChanged();
 				DiscardChangesCommand.NotifyCanExecuteChanged();
 				ApplyChangesCommand.NotifyCanExecuteChanged();
-				StatusMessage = $"Successfully applied {processedChanges} changes";
+				
+				// Update dialog title if it's open
+				UpdatePendingChangesDialogTitle();
+				
+				// Clear remote file list preview
+				RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
+				
+				// Refresh the current remote directory to show updated state
+				if (!IsCancelling && !string.IsNullOrEmpty(NavigationContext.SelectedBucket)) {
+					_ = Task.Run(async () => {
+						try {
+							await RemoteFiles.LoadFilesAsync(NavigationContext.SelectedBucket, NavigationContext.RemoteCurrentPath ?? "");
+						} catch (Exception ex) {
+							Console.WriteLine($"Error refreshing remote directory: {ex.Message}");
+						}
+					});
+				}
+				
+				if (!IsCancelling) {
+					StatusMessage = $"Successfully applied {processedChanges} changes";
+				}
+			} catch (OperationCanceledException) {
+				StatusMessage = "Operation cancelled";
 			} catch (Exception ex) {
-				StatusMessage = $"Error applying changes: {ex.Message}";
+				if (!IsCancelling) {
+					StatusMessage = $"Error applying changes: {ex.Message}";
+				}
 			} finally {
 				IsApplying = false;
+				IsCancelling = false;
+				IsProgressIndeterminate = false;
 				ProgressValue = 0;
+				_applyChangesCancellationTokenSource?.Dispose();
+				_applyChangesCancellationTokenSource = null;
+				CancelApplyChangesCommand.NotifyCanExecuteChanged();
+				DiscardChangesCommand.NotifyCanExecuteChanged();
 			}
 		}
 
-		private async Task ProcessChangeAsync(PendingChange change) {
+		private async Task ProcessChangeAsync(PendingChange change, CancellationToken cancellationToken = default) {
 			switch (change.Type) {
 				case ChangeType.CompressAndUpload:
-					await ProcessCompressAndUploadAsync(change);
+					await ProcessCompressAndUploadAsync(change, cancellationToken);
 					break;
 				case ChangeType.RawUpload:
-					await ProcessRawUploadAsync(change);
+					await ProcessRawUploadAsync(change, cancellationToken);
 					break;
 				case ChangeType.UpdateYaml:
-					await ProcessYamlUpdateAsync(change);
+					await ProcessYamlUpdateAsync(change, cancellationToken);
 					break;
 			}
 		}
 
-		private async Task ProcessCompressAndUploadAsync(PendingChange change) {
+		private async Task ProcessCompressAndUploadAsync(PendingChange change, CancellationToken cancellationToken = default) {
 			if (string.IsNullOrEmpty(change.LocalPath))
 				return;
 
 			var originalHash = await _fileService.CalculateFileHashAsync(change.LocalPath);
-			var compressedData = await _compressionService.CompressFileAsync(change.LocalPath);
+			cancellationToken.ThrowIfCancellationRequested();
+			var tempCompressedFile = await _compressionService.CompressFileAsync(change.LocalPath);
 
-			var metadata = new Dictionary<string, string>
-			{
-				{ "original-hash", originalHash }
-			};
+			try {
+				cancellationToken.ThrowIfCancellationRequested();
 
-			await _s3Service.UploadDataAsync(change.BucketName, change.RemoteKey, compressedData, metadata);
+				var metadata = new Dictionary<string, string>
+				{
+					{ "original-hash", originalHash }
+				};
+
+				await _s3Service.UploadFileAsync(change.BucketName, change.RemoteKey, tempCompressedFile, metadata);
+			} finally {
+				// Clean up temporary compressed file
+				if (File.Exists(tempCompressedFile)) {
+					File.Delete(tempCompressedFile);
+				}
+			}
 		}
 
-		private async Task ProcessRawUploadAsync(PendingChange change) {
+		private async Task ProcessRawUploadAsync(PendingChange change, CancellationToken cancellationToken = default) {
 			if (string.IsNullOrEmpty(change.LocalPath))
 				return;
 
 			await _s3Service.UploadFileAsync(change.BucketName, change.RemoteKey, change.LocalPath, change.Metadata);
 		}
 
-		private async Task ProcessYamlUpdateAsync(PendingChange change) {
+		private async Task ProcessYamlUpdateAsync(PendingChange change, CancellationToken cancellationToken = default) {
 			var yamlData = await _contentStatusService.GenerateYamlAsync(change.BucketName);
+			cancellationToken.ThrowIfCancellationRequested();
 			await _s3Service.UploadDataAsync(change.BucketName, change.RemoteKey, yamlData);
 		}
 
 		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
 
+		[RelayCommand(CanExecute = nameof(CanCancelApplyChanges))]
+		private void CancelApplyChanges() {
+			if (_applyChangesCancellationTokenSource != null && !IsCancelling) {
+				IsCancelling = true;
+				IsProgressIndeterminate = true;
+				StatusMessage = "Cancelling...";
+				_applyChangesCancellationTokenSource.Cancel();
+			}
+		}
+
+		private bool CanCancelApplyChanges() => IsApplying && !IsCancelling;
+
 		[RelayCommand]
 		private async Task LoginAsync() {
 			try {
+				// Check if we have a valid token saved
+				var savedToken = await _authService.LoadSavedTokenAsync();
+				if (savedToken != null && !savedToken.IsExpired()) {
+					await LoginWithTokenAsync(savedToken, "Auto-login successful using saved credentials!");
+					return;
+				}
+
 				var dialog = new EJRASync.UI.Views.OAuthDialog(_authService);
 				
-				// Show dialog and start authentication on UI thread
-				var dialogTask = dialog.StartAuthenticationAsync();
-				
+				// Show dialog and start authentication
+				var dialogTask = dialog.StartAuthenticationAsync();				
 				var result = dialog.ShowDialog();
 				
 				if (result == true && dialog.OAuthToken != null) {
-					StatusMessage = "Login successful! Checking permissions...";
-					
-					// Store the OAuth token and update user info
-					_currentOAuthToken = dialog.OAuthToken;
-					UserDisplayName = dialog.OAuthToken.GetDisplayName();
-					UserProfileImageUrl = dialog.OAuthToken.GetProfileImageUrl();
-					UserProviderName = dialog.OAuthToken.GetProviderName();
-					IsLoggedIn = true;
-					
-					// Get write R2 tokens using the OAuth token
-					var tokens = await _authApi.GetTokensAsync(dialog.OAuthToken);
-					
-					if (tokens?.UserWrite != null) {
-						HasWriteAccess = true;
-						StatusMessage = "Login successful! You now have write access.";
-					} else {
-						StatusMessage = "Login successful, but no write access granted.";
-					}
+					// Save the new token for future auto-login
+					await _authService.SaveTokenAsync(dialog.OAuthToken);
+					await LoginWithTokenAsync(dialog.OAuthToken, "Login successful! Checking permissions...");
 				} else {
 					StatusMessage = "Login cancelled or failed.";
 				}
@@ -314,8 +435,50 @@ namespace EJRASync.UI {
 			}
 		}
 
+		private async Task LoginWithTokenAsync(OAuthToken token, string initialStatusMessage) {
+			try {
+				// Get write R2 tokens using the OAuth token (this can be done on background thread)
+				var tokens = await _authApi.GetTokensAsync(token);
+				
+				// Update UI properties
+				await Application.Current.Dispatcher.InvokeAsync(() => {
+					StatusMessage = initialStatusMessage;
+					
+					// Store the OAuth token and update user info
+					_currentOAuthToken = token;
+					UserDisplayName = token.GetDisplayName();
+					UserProfileImageUrl = token.GetProfileImageUrl();
+					UserProviderName = token.GetProviderName();
+					IsLoggedIn = true;
+					
+					if (tokens?.UserWrite != null) {
+						HasWriteAccess = true;
+						StatusMessage = "Login successful! (Admin)";
+						
+						// Update S3Service with write credentials
+						_s3Service.UpdateCredentials(
+							tokens.UserWrite.Aws.AccessKeyId,
+							tokens.UserWrite.Aws.SecretAccessKey,
+							tokens.UserWrite.S3Url
+						);
+					} else {
+						StatusMessage = "Login successful!";
+					}
+				});
+			}
+			catch (Exception ex) {
+				await Application.Current.Dispatcher.InvokeAsync(() => {
+					StatusMessage = $"Auto-login failed: {ex.Message}";
+				});
+				throw; // Re-throw so TryAutoLoginAsync can handle it
+			}
+		}
+
 		[RelayCommand]
-		private void Logout() {
+		private async void Logout() {
+			// Clear the saved token
+			await _authService.ClearSavedTokenAsync();
+			
 			_currentOAuthToken = null;
 			UserDisplayName = null;
 			UserProfileImageUrl = null;
@@ -323,6 +486,20 @@ namespace EJRASync.UI {
 			IsLoggedIn = false;
 			HasWriteAccess = false;
 			StatusMessage = "Logged out successfully.";
+			
+			// Revert S3Service to read-only credentials
+			try {
+				var tokens = await _authApi.GetTokensAsync();
+				if (tokens?.UserRead != null) {
+					_s3Service.UpdateCredentials(
+						tokens.UserRead.Aws.AccessKeyId,
+						tokens.UserRead.Aws.SecretAccessKey,
+						tokens.UserRead.S3Url
+					);
+				}
+			} catch {
+				// If we can't get read tokens, that's ok - just continue
+			}
 		}
 
 		public string ViewChangesButtonText => $"View {PendingChanges.Count} changes";
@@ -333,6 +510,12 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+			
+			// Update dialog title if it's open
+			UpdatePendingChangesDialogTitle();
+			
+			// Update remote file list preview - this will immediately update the current view
+			RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
 		}
 
 		partial void OnPendingChangesChanged(ObservableCollection<PendingChange> value) {
@@ -343,6 +526,12 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+		}
+
+		private void UpdatePendingChangesDialogTitle() {
+			if (_pendingChangesDialog != null) {
+				_pendingChangesDialog.Title = $"Pending Changes ({PendingChanges.Count} items)";
+			}
 		}
 	}
 }

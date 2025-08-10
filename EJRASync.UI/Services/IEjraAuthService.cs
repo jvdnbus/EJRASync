@@ -48,6 +48,13 @@ namespace EJRASync.UI.Services {
 				_ => "Unknown"
 			};
 		}
+
+		public bool IsExpired() {
+			if (UserProfile?.Exp == null) return true;
+			
+			var expirationTime = DateTimeOffset.FromUnixTimeSeconds(UserProfile.Exp);
+			return DateTimeOffset.UtcNow >= expirationTime;
+		}
 	}
 
 	public class UserTokenClaims {
@@ -149,5 +156,8 @@ namespace EJRASync.UI.Services {
 
 	public interface IEjraAuthService {
 		Task<OAuthToken?> AuthenticateAsync();
+		Task SaveTokenAsync(OAuthToken token);
+		Task<OAuthToken?> LoadSavedTokenAsync();
+		Task ClearSavedTokenAsync();
 	}
 }

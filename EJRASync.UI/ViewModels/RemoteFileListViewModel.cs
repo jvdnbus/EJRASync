@@ -4,6 +4,7 @@ using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
 using System.Collections.ObjectModel;
+using System.IO;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class RemoteFileListViewModel : ObservableObject {
@@ -58,6 +59,9 @@ namespace EJRASync.UI.ViewModels {
 
 					_mainViewModel.NavigationContext.SelectedBucket = null;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = "";
+					
+					// Update pending changes preview for bucket list
+					UpdatePendingChangesPreview(_mainViewModel.PendingChanges);
 				});
 			} finally {
 				await this.InvokeUIAsync(() => {
@@ -112,6 +116,9 @@ namespace EJRASync.UI.ViewModels {
 
 					_mainViewModel.NavigationContext.SelectedBucket = bucketName;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = prefix;
+					
+					// Update pending changes preview for new directory
+					UpdatePendingChangesPreview(_mainViewModel.PendingChanges);
 				});
 			} catch (Exception ex) {
 				Console.WriteLine($"Error loading files from {bucketName}/{prefix}: {ex.Message}");
@@ -215,6 +222,129 @@ namespace EJRASync.UI.ViewModels {
 			if (file != null) {
 				file.IsActive = e.IsActive;
 			}
+		}
+
+		public void UpdatePendingChangesPreview(IEnumerable<PendingChange> pendingChanges) {
+			_ = Task.Run(async () => {
+				await this.InvokeUIAsync(() => {
+					var currentBucket = _mainViewModel.NavigationContext.SelectedBucket;
+					var currentPath = _mainViewModel.NavigationContext.RemoteCurrentPath ?? "";
+
+					if (string.IsNullOrEmpty(currentBucket)) return;
+
+					// Clear existing pending change status and remove preview-only items
+					var itemsToRemove = new List<RemoteFileItem>();
+					foreach (var file in Files) {
+						if (file.IsPendingChange) {
+							if (file.IsPreviewOnly) {
+								// Remove preview-only items (like new folder previews)
+								itemsToRemove.Add(file);
+							} else {
+								// Just clear the pending status for existing items
+								file.IsPendingChange = false;
+								file.Status = "";
+							}
+						}
+					}
+
+					// Remove preview-only items
+					foreach (var item in itemsToRemove) {
+						Files.Remove(item);
+					}
+
+					// Find pending changes that affect current directory
+					var relevantChanges = pendingChanges.Where(change => 
+						change.BucketName == currentBucket && 
+						IsChangeRelevantToCurrentDirectory(change, currentPath)).ToList();
+
+					// Group changes by the name they will show in current directory to avoid duplicates
+					var changesByFileName = relevantChanges.GroupBy(change => GetFileNameFromChange(change, currentPath));
+
+					foreach (var changeGroup in changesByFileName) {
+						var fileName = changeGroup.Key;
+						var existingFile = Files.FirstOrDefault(f => f.Name == fileName);
+						var firstChange = changeGroup.First();
+
+						if (existingFile != null) {
+							// Update existing file/directory - these get "Pending" status
+							existingFile.IsPendingChange = true;
+							existingFile.Status = "(Pending)";
+						} else if (firstChange.Type == ChangeType.CompressAndUpload || firstChange.Type == ChangeType.RawUpload) {
+							// Determine if this should be a directory or file based on the change
+							var changeKey = firstChange.RemoteKey.Replace('\\', '/');
+							var isDirectory = string.IsNullOrEmpty(currentPath) && changeKey.Contains('/');
+							
+							// Add new file/folder preview for uploads - these get "To be added" status
+							var newFile = new RemoteFileItem {
+								Name = fileName,
+								Key = fileName,
+								DisplaySize = isDirectory ? "Folder" : (firstChange.FileSizeBytes?.ToString() ?? "Unknown"),
+								LastModified = DateTime.Now,
+								IsDirectory = isDirectory,
+								IsPendingChange = true,
+								IsPreviewOnly = true,
+								Status = "(To be added)"
+							};
+							Files.Add(newFile);
+						}
+					}
+				});
+			});
+		}
+
+		public void FlashCompletedChange(string changeId, string fileName) {
+			var file = Files.FirstOrDefault(f => f.Name == fileName);
+			if (file != null) {
+				file.IsFlashing = true;
+				file.IsPendingChange = false;
+				file.Status = "";
+				
+				// Reset flash after animation
+				Task.Delay(500).ContinueWith(_ => {
+					this.InvokeUIAsync(() => {
+						file.IsFlashing = false;
+					});
+				});
+			}
+		}
+
+		private bool IsChangeRelevantToCurrentDirectory(PendingChange change, string currentPath) {
+			var changeKey = change.RemoteKey.Replace('\\', '/');
+			
+			// If we're at the bucket root (empty currentPath)
+			if (string.IsNullOrEmpty(currentPath)) {
+				// Always show changes - either files at root or the top-level folders of nested files
+				return true;
+			}
+			
+			// For subdirectories, check if the change is directly in the current path
+			var changeDirectory = Path.GetDirectoryName(changeKey)?.Replace('\\', '/') ?? "";
+			return changeDirectory == currentPath;
+		}
+
+		private string GetFileNameFromChange(PendingChange change, string currentPath) {
+			var changeKey = change.RemoteKey.Replace('\\', '/');
+			
+			if (string.IsNullOrEmpty(currentPath)) {
+				// At bucket root - if the key has a path, return the first folder name
+				if (changeKey.Contains('/')) {
+					return changeKey.Split('/')[0];
+				}
+				return changeKey;
+			}
+			
+			// In subdirectory - return just the filename
+			return Path.GetFileName(changeKey);
+		}
+
+		private string GetStatusFromChangeType(ChangeType changeType) {
+			return changeType switch {
+				ChangeType.CompressAndUpload => "(To be added)",
+				ChangeType.RawUpload => "(To be added)",
+				ChangeType.DeleteRemote => "(To be removed)",
+				ChangeType.UpdateYaml => "(Pending)",
+				_ => "(Pending)"
+			};
 		}
 
 		public bool CanTagAsActive(RemoteFileItem? file) {

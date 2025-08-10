@@ -130,9 +130,10 @@ namespace EJRASync.UI.ViewModels {
 				return;
 
 			var relativePath = GetRelativeRemotePath(file.FullPath, bucketName);
+			var fullRelativePath = Path.GetRelativePath(_mainViewModel.NavigationContext.LocalBasePath, file.FullPath);
 			var change = new PendingChange {
 				Type = ChangeType.CompressAndUpload,
-				Description = $"Compress and upload {file.Name}",
+				Description = fullRelativePath,
 				LocalPath = file.FullPath,
 				RemoteKey = relativePath,
 				BucketName = bucketName,
@@ -188,9 +189,10 @@ namespace EJRASync.UI.ViewModels {
 				return;
 
 			var relativePath = GetRelativeRemotePath(file.FullPath, bucketName);
+			var fullRelativePath = Path.GetRelativePath(_mainViewModel.NavigationContext.LocalBasePath, file.FullPath);
 			var change = new PendingChange {
 				Type = ChangeType.RawUpload,
-				Description = $"Upload {file.Name}",
+				Description = fullRelativePath,
 				LocalPath = file.FullPath,
 				RemoteKey = relativePath,
 				BucketName = bucketName,

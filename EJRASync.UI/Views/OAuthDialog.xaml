@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
-        Title="Login - EJRA Auth" Height="370" Width="600" 
+        Title="Login" Height="370" Width="600" 
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="#1E1E1E">
@@ -103,7 +103,6 @@
         <!-- Header -->
         <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" Padding="20,16">
             <StackPanel>
-                <TextBlock Text="Login to EJRA Auth" FontSize="18" FontWeight="Bold" Foreground="#F0F0F0" Margin="0,0,0,8"/>
                 <TextBlock Text="Authenticate to get write access for uploading and managing content." 
                           FontSize="13" Foreground="#CCCCCC"/>
             </StackPanel>
