@@ -58,7 +58,7 @@ namespace EJRASync.UI {
 
 		private OAuthToken? _currentOAuthToken;
 		private EJRASync.UI.Views.PendingChangesDialog? _pendingChangesDialog;
-		private CancellationTokenSource? _applyChangesCancellationTokenSource;
+		private CancellationTokenSource? _operationCancellationTokenSource;
 
 		public LocalFileListViewModel LocalFiles { get; }
 		public RemoteFileListViewModel RemoteFiles { get; }
@@ -129,6 +129,10 @@ namespace EJRASync.UI {
 			StatusMessage = "Scanning for changes...";
 			ProgressValue = 0;
 
+			_operationCancellationTokenSource = new CancellationTokenSource();
+			CancelOperationCommand.NotifyCanExecuteChanged();
+			ScanChangesCommand.NotifyCanExecuteChanged();
+
 			try {
 				PendingChanges.Clear();
 				OnPropertyChanged(nameof(ViewChangesButtonText));
@@ -143,69 +147,112 @@ namespace EJRASync.UI {
 				var localFolders = new[] { "content/cars", "content/tracks", "content/fonts", "apps" };
 
 				for (int i = 0; i < buckets.Length; i++) {
+					_operationCancellationTokenSource.Token.ThrowIfCancellationRequested();
+					
 					var bucket = buckets[i];
 					var localFolder = localFolders[i];
 					var localPath = Path.Combine(NavigationContext.LocalBasePath, localFolder);
 
 					if (Directory.Exists(localPath)) {
-						await ScanBucketChangesAsync(bucket, localPath);
+						await ScanBucketChangesAsync(bucket, localPath, _operationCancellationTokenSource.Token);
 					}
 
-					ProgressValue = (i + 1) * 100.0 / buckets.Length;
+					if (!IsCancelling) {
+						ProgressValue = (i + 1) * 100.0 / buckets.Length;
+					}
 				}
 
-				StatusMessage = $"Found {PendingChanges.Count} changes";
-				
-				// Update UI after scanning is complete
-				OnPropertyChanged(nameof(ViewChangesButtonText));
-				ViewChangesCommand.NotifyCanExecuteChanged();
-				DiscardChangesCommand.NotifyCanExecuteChanged();
-				ApplyChangesCommand.NotifyCanExecuteChanged();
-				
-				// Update remote file list preview
-				RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
+				if (!IsCancelling) {
+					StatusMessage = $"Found {PendingChanges.Count} changes";
+					
+					// Update UI after scanning is complete
+					OnPropertyChanged(nameof(ViewChangesButtonText));
+					ViewChangesCommand.NotifyCanExecuteChanged();
+					DiscardChangesCommand.NotifyCanExecuteChanged();
+					ApplyChangesCommand.NotifyCanExecuteChanged();
+					
+					// Update remote file list preview
+					RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
+				}
+			} catch (OperationCanceledException) {
+				StatusMessage = "Scan cancelled";
 			} catch (Exception ex) {
-				StatusMessage = $"Error scanning: {ex.Message}";
+				if (!IsCancelling) {
+					StatusMessage = $"Error scanning: {ex.Message}";
+				}
 			} finally {
 				IsScanning = false;
+				IsCancelling = false;
+				IsProgressIndeterminate = false;
 				ProgressValue = 0;
+				_operationCancellationTokenSource?.Dispose();
+				_operationCancellationTokenSource = null;
+				CancelOperationCommand.NotifyCanExecuteChanged();
+				ScanChangesCommand.NotifyCanExecuteChanged();
 			}
 		}
 
-		private async Task ScanBucketChangesAsync(string bucketName, string localPath) {
-			// First, get the list of existing remote directories (top-level folders in the bucket)
-			var remoteItems = await _s3Service.ListObjectsAsync(bucketName);
-			var remoteDirs = remoteItems.Where(item => item.IsDirectory).Select(dir => dir.Name).ToList();
+		private async Task ScanBucketChangesAsync(string bucketName, string localPath, CancellationToken cancellationToken = default) {
+			// Use indeterminate progress for unpredictable bucket scanning work
+			IsProgressIndeterminate = true;
+			StatusMessage = $"Scanning {bucketName}...";
 
-			// Collect all files from all remote directories and their corresponding local files
-			var allRemoteFiles = new List<RemoteFileItem>();
-			var allLocalFiles = new List<LocalFileItem>();
-
-			foreach (var remoteDir in remoteDirs) {
-				var localDirPath = Path.Combine(localPath, remoteDir);
+			try {
+				cancellationToken.ThrowIfCancellationRequested();
 				
-				// Only scan if the corresponding local directory exists
-				if (Directory.Exists(localDirPath)) {
-					// Get all files in this remote directory recursively (no delimiter to get nested files)
-					var remoteDirFiles = await _s3Service.ListObjectsAsync(bucketName, remoteDir);
-					allRemoteFiles.AddRange(remoteDirFiles.Where(f => !f.IsDirectory));
-					
-					// Get all local files in this directory recursively
-					var localDirFiles = await _fileService.GetLocalFilesAsync(localDirPath);
-					allLocalFiles.AddRange(localDirFiles.Where(f => !f.IsDirectory));
-				}
-			}
+				// First, get the list of existing remote directories (top-level folders in the bucket)
+				var remoteItems = await _s3Service.ListObjectsAsync(bucketName, cancellationToken: cancellationToken);
+				var remoteDirs = remoteItems.Where(item => item.IsDirectory).Select(dir => dir.Name).ToList();
 
-			// Now batch process all collected files in a non-recursive manner
-			await ProcessFileComparisonBatch(bucketName, localPath, allLocalFiles, allRemoteFiles);
+				// Collect all files from all remote directories and their corresponding local files
+				var allRemoteFiles = new List<RemoteFileItem>();
+				var allLocalFiles = new List<LocalFileItem>();
+				
+				foreach (var remoteDir in remoteDirs) {
+					cancellationToken.ThrowIfCancellationRequested();
+					
+					var localDirPath = Path.Combine(localPath, remoteDir);
+					
+					// Update status to show current directory being scanned
+					if (!IsCancelling) {
+						StatusMessage = $"Scanning {bucketName}/{remoteDir}...";
+					}
+					
+					// Only scan if the corresponding local directory exists
+					if (Directory.Exists(localDirPath)) {
+						// Get all files in this remote directory recursively (no delimiter to get nested files)
+						var remoteDirFiles = await _s3Service.ListObjectsAsync(bucketName, remoteDir, "", cancellationToken);
+						allRemoteFiles.AddRange(remoteDirFiles.Where(f => !f.IsDirectory));
+						
+						// Get all local files in this directory recursively
+						var localDirFiles = await _fileService.GetLocalFilesAsync(localDirPath, true);
+						allLocalFiles.AddRange(localDirFiles.Where(f => !f.IsDirectory));
+					}
+				}
+
+				cancellationToken.ThrowIfCancellationRequested();
+				
+				// Update status for file comparison phase
+				if (!IsCancelling) {
+					StatusMessage = $"Comparing {allLocalFiles.Count} files in {bucketName}...";
+				}
+
+				// Now batch process all collected files in a non-recursive manner
+				await ProcessFileComparisonBatch(bucketName, localPath, allLocalFiles, allRemoteFiles, cancellationToken);
+			} finally {
+				// Reset indeterminate progress (parent method will handle final cleanup)
+				IsProgressIndeterminate = false;
+			}
 		}
 
-		private async Task ProcessFileComparisonBatch(string bucketName, string basePath, List<LocalFileItem> localFiles, List<RemoteFileItem> remoteFiles) {
+		private async Task ProcessFileComparisonBatch(string bucketName, string basePath, List<LocalFileItem> localFiles, List<RemoteFileItem> remoteFiles, CancellationToken cancellationToken = default) {
 			// Create a dictionary for faster remote file lookup by key
 			var remoteFilesByKey = remoteFiles.ToDictionary(r => r.Key, r => r);
 
 			// Process each local file against the remote files
 			foreach (var localFile in localFiles) {
+				cancellationToken.ThrowIfCancellationRequested();
+				
 				var relativePath = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
 				
 				if (remoteFilesByKey.TryGetValue(relativePath, out var remoteFile)) {
@@ -244,7 +291,7 @@ namespace EJRASync.UI {
 			ApplyChangesCommand.NotifyCanExecuteChanged();
 		}
 
-		private bool CanScanChanges() => !IsScanning && !IsApplying;
+		private bool CanScanChanges() => !IsScanning && !IsApplying && !IsCancelling;
 
 		[RelayCommand(CanExecute = nameof(CanViewChanges))]
 		private void ViewChanges() {
@@ -292,8 +339,8 @@ namespace EJRASync.UI {
 			StatusMessage = "Applying changes...";
 			ProgressValue = 0;
 
-			_applyChangesCancellationTokenSource = new CancellationTokenSource();
-			CancelApplyChangesCommand.NotifyCanExecuteChanged();
+			_operationCancellationTokenSource = new CancellationTokenSource();
+			CancelOperationCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 
 			try {
@@ -302,7 +349,7 @@ namespace EJRASync.UI {
 
 				var parallelOptions = new ParallelOptions {
 					MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
-					CancellationToken = _applyChangesCancellationTokenSource.Token
+					CancellationToken = _operationCancellationTokenSource.Token
 				};
 
 				await Parallel.ForEachAsync(PendingChanges, parallelOptions, async (change, ct) => {
@@ -359,9 +406,9 @@ namespace EJRASync.UI {
 				IsCancelling = false;
 				IsProgressIndeterminate = false;
 				ProgressValue = 0;
-				_applyChangesCancellationTokenSource?.Dispose();
-				_applyChangesCancellationTokenSource = null;
-				CancelApplyChangesCommand.NotifyCanExecuteChanged();
+				_operationCancellationTokenSource?.Dispose();
+				_operationCancellationTokenSource = null;
+				CancelOperationCommand.NotifyCanExecuteChanged();
 				DiscardChangesCommand.NotifyCanExecuteChanged();
 			}
 		}
@@ -445,17 +492,17 @@ namespace EJRASync.UI {
 
 		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
 
-		[RelayCommand(CanExecute = nameof(CanCancelApplyChanges))]
-		private void CancelApplyChanges() {
-			if (_applyChangesCancellationTokenSource != null && !IsCancelling) {
+		[RelayCommand(CanExecute = nameof(CanCancelOperation))]
+		private void CancelOperation() {
+			if (_operationCancellationTokenSource != null && !IsCancelling) {
 				IsCancelling = true;
 				IsProgressIndeterminate = true;
 				StatusMessage = "Cancelling...";
-				_applyChangesCancellationTokenSource.Cancel();
+				_operationCancellationTokenSource.Cancel();
 			}
 		}
 
-		private bool CanCancelApplyChanges() => IsApplying && !IsCancelling;
+		private bool CanCancelOperation() => (IsApplying || IsScanning) && !IsCancelling;
 
 		[RelayCommand]
 		private async Task LoginAsync() {

@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 
 namespace EJRASync.UI.Services {
 	public class FileService : IFileService {
-		public async Task<List<LocalFileItem>> GetLocalFilesAsync(string directoryPath) {
+		public async Task<List<LocalFileItem>> GetLocalFilesAsync(string directoryPath, bool recursive = false) {
 			var items = new List<LocalFileItem>();
 
 			if (!Directory.Exists(directoryPath))
@@ -12,40 +12,95 @@ namespace EJRASync.UI.Services {
 
 			await Task.Run(() => {
 				try {
-					// Add directories first
-					var directories = Directory.GetDirectories(directoryPath);
-					foreach (var dir in directories) {
-						var dirInfo = new DirectoryInfo(dir);
-						items.Add(new LocalFileItem {
-							Name = dirInfo.Name,
-							FullPath = dir,
-							DisplaySize = "Folder",
-							LastModified = dirInfo.LastWriteTime,
-							IsDirectory = true
-						});
-					}
+					if (recursive) {
+						// Use EnumerateFileSystemEntries for recursive enumeration
+						var searchOption = SearchOption.AllDirectories;
+						var entries = Directory.EnumerateFileSystemEntries(directoryPath, "*", searchOption);
+						
+						foreach (var entry in entries) {
+							try {
+								if (Directory.Exists(entry)) {
+									var dirInfo = new DirectoryInfo(entry);
+									items.Add(new LocalFileItem {
+										Name = GetRelativePath(directoryPath, entry),
+										FullPath = entry,
+										DisplaySize = "Folder",
+										LastModified = dirInfo.LastWriteTime,
+										IsDirectory = true
+									});
+								} else if (File.Exists(entry)) {
+									var fileInfo = new FileInfo(entry);
+									items.Add(new LocalFileItem {
+										Name = GetRelativePath(directoryPath, entry),
+										FullPath = entry,
+										DisplaySize = FormatFileSize(fileInfo.Length),
+										LastModified = fileInfo.LastWriteTime,
+										SizeBytes = fileInfo.Length,
+										IsDirectory = false
+									});
+								}
+							} catch (UnauthorizedAccessException) {
+								// Skip entries we can't access
+							} catch (Exception ex) {
+								Console.WriteLine($"Error processing entry {entry}: {ex.Message}");
+							}
+						}
+					} else {
+						// Non-recursive: Only current directory
+						// Add directories first
+						var directories = Directory.EnumerateDirectories(directoryPath);
+						foreach (var dir in directories) {
+							try {
+								var dirInfo = new DirectoryInfo(dir);
+								items.Add(new LocalFileItem {
+									Name = dirInfo.Name,
+									FullPath = dir,
+									DisplaySize = "Folder",
+									LastModified = dirInfo.LastWriteTime,
+									IsDirectory = true
+								});
+							} catch (UnauthorizedAccessException) {
+								// Skip directories we can't access
+							} catch (Exception ex) {
+								Console.WriteLine($"Error processing directory {dir}: {ex.Message}");
+							}
+						}
 
-					// Add files
-					var files = Directory.GetFiles(directoryPath);
-					foreach (var file in files) {
-						var fileInfo = new FileInfo(file);
-						items.Add(new LocalFileItem {
-							Name = fileInfo.Name,
-							FullPath = file,
-							DisplaySize = FormatFileSize(fileInfo.Length),
-							LastModified = fileInfo.LastWriteTime,
-							SizeBytes = fileInfo.Length,
-							IsDirectory = false
-						});
+						// Add files
+						var files = Directory.EnumerateFiles(directoryPath);
+						foreach (var file in files) {
+							try {
+								var fileInfo = new FileInfo(file);
+								items.Add(new LocalFileItem {
+									Name = fileInfo.Name,
+									FullPath = file,
+									DisplaySize = FormatFileSize(fileInfo.Length),
+									LastModified = fileInfo.LastWriteTime,
+									SizeBytes = fileInfo.Length,
+									IsDirectory = false
+								});
+							} catch (UnauthorizedAccessException) {
+								// Skip files we can't access
+							} catch (Exception ex) {
+								Console.WriteLine($"Error processing file {file}: {ex.Message}");
+							}
+						}
 					}
 				} catch (UnauthorizedAccessException) {
-					// Handle access denied
+					// Handle access denied to the root directory
 				} catch (Exception ex) {
 					Console.WriteLine($"Error listing files in {directoryPath}: {ex.Message}");
 				}
 			});
 
 			return items.OrderByDescending(x => x.IsDirectory).ThenBy(x => x.Name).ToList();
+		}
+
+		private string GetRelativePath(string basePath, string fullPath) {
+			// Get relative path for recursive listings
+			var baseUri = new Uri(basePath.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar);
+			var fullUri = new Uri(fullPath);
+			return Uri.UnescapeDataString(baseUri.MakeRelativeUri(fullUri).ToString().Replace('/', Path.DirectorySeparatorChar));
 		}
 
 		public async Task<string> CalculateFileHashAsync(string filePath) {

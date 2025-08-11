@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -32,8 +33,13 @@ namespace EJRASync.UI.Services {
 
 		private async Task LoadYamlForBucketAsync(string bucketName, string yamlFileName) {
 			try {
-				var yamlData = await _s3Service.DownloadObjectAsync(bucketName, yamlFileName);
-				var yamlContent = Encoding.UTF8.GetString(yamlData);
+				var tempFilePath = await _s3Service.DownloadObjectAsync(bucketName, yamlFileName, null, null);
+				var yamlContent = await File.ReadAllTextAsync(tempFilePath);
+				
+				// Clean up temp file
+				if (File.Exists(tempFilePath)) {
+					File.Delete(tempFilePath);
+				}
 
 				var deserializer = new DeserializerBuilder()
 					.WithNamingConvention(UnderscoredNamingConvention.Instance)

@@ -89,7 +89,7 @@ namespace EJRASync.UI.Services {
 			) || ex is HttpRequestException || ex is TaskCanceledException || ex is TimeoutException;
 		}
 
-		public async Task<List<RemoteFileItem>> ListObjectsAsync(string bucketName, string prefix = "") {
+		public async Task<List<RemoteFileItem>> ListObjectsAsync(string bucketName, string prefix = "", string delimiter = "/", CancellationToken cancellationToken = default) {
 			var items = new List<RemoteFileItem>();
 			string? continuationToken = null;
 
@@ -97,11 +97,11 @@ namespace EJRASync.UI.Services {
 				var request = new ListObjectsV2Request {
 					BucketName = bucketName,
 					Prefix = prefix,
-					Delimiter = "/",
+					Delimiter = delimiter,
 					ContinuationToken = continuationToken
 				};
 
-				var response = await _s3Client.ListObjectsV2Async(request);
+				var response = await _s3Client.ListObjectsV2Async(request, cancellationToken);
 
 				// Add directories
 				if (response.CommonPrefixes != null) {
@@ -331,16 +331,46 @@ namespace EJRASync.UI.Services {
 			}
 		}
 
-		public async Task<byte[]> DownloadObjectAsync(string bucketName, string key) {
+		public async Task<string> DownloadObjectAsync(string bucketName, string key, FileStream? fileStream = null, IProgress<long>? progress = null) {
 			var request = new GetObjectRequest {
 				BucketName = bucketName,
 				Key = key
 			};
 
 			using var response = await _s3Client.GetObjectAsync(request);
-			using var memoryStream = new MemoryStream();
-			await response.ResponseStream.CopyToAsync(memoryStream);
-			return memoryStream.ToArray();
+			
+			if (fileStream != null) {
+				using var responseStream = response.ResponseStream;
+				await CopyStreamWithProgressAsync(responseStream, fileStream, response.ContentLength, progress);
+				await fileStream.FlushAsync();
+				return fileStream.Name;
+			} else {
+				var tempFilePath = Path.GetTempFileName();
+				using (var tempFileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write)) {
+					using var responseStream = response.ResponseStream;
+					await CopyStreamWithProgressAsync(responseStream, tempFileStream, response.ContentLength, progress);
+					await tempFileStream.FlushAsync();
+				}
+				return tempFilePath;
+			}
+		}
+
+		private async Task CopyStreamWithProgressAsync(Stream source, Stream destination, long totalBytes, IProgress<long>? progress) {
+			if (progress == null) {
+				await source.CopyToAsync(destination);
+				return;
+			}
+
+			const int bufferSize = 8192;
+			var buffer = new byte[bufferSize];
+			long totalBytesRead = 0;
+
+			int bytesRead;
+			while ((bytesRead = await source.ReadAsync(buffer, 0, buffer.Length)) > 0) {
+				await destination.WriteAsync(buffer, 0, bytesRead);
+				totalBytesRead += bytesRead;
+				progress.Report(totalBytesRead);
+			}
 		}
 
 		private string FormatFileSize(long bytes) {

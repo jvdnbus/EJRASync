@@ -7,9 +7,51 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 
 namespace EJRASync.UI {
 	public partial class MainWindow : Views.DarkThemeWindow {
+		// Constants
+		private const string ZeroByteFileSize = "0 B";
+		private static readonly string[] FileSizeSuffixes = { "B", "KB", "MB", "GB", "TB" };
+		
+		// Asset Icon Paths
+		private const string IconCheckSquare = "/Assets/Icons/check-square.png";
+		private const string IconSubtractSquare = "/Assets/Icons/subtract-square.png";
+		private const string IconDelete = "/Assets/Icons/delete.png";
+		
+		// Context Menu Text
+		private const string MenuTagAsActive = "Tag as Active";
+		private const string MenuTagAsInactive = "Tag as Inactive";
+		private const string MenuDelete = "Delete";
+		
+		// Drag/Drop Data Format Keys
+		private const string DataKeyLocalFiles = "LocalFiles";
+		private const string DataKeyRemoteFiles = "RemoteFiles";
+		
+		// Color Values
+		private static readonly Color MenuBackgroundColor = Color.FromRgb(0x2D, 0x2D, 0x30);
+		private static readonly Color MenuForegroundColor = Color.FromRgb(0xF0, 0xF0, 0xF0);
+		private static readonly Color SeparatorBackgroundColor = Color.FromRgb(0x3E, 0x3E, 0x42);
+		
+		// Status Messages
+		private const string StatusInitializing = "Initializing...";
+		private const string StatusReady = "Ready";
+		private const string StatusDownloadingFiles = "Downloading files...";
+		private const string StatusDownloadingFileFormat = "Downloading {0} ({1}/{2})...";
+		private const string StatusDownloadedFilesFormat = "Downloaded {0} files";
+		private const string StatusUploadItemsFormat = "Added {0} items for upload";
+		private const string StatusCannotDownloadNoBucket = "Cannot download: no bucket selected";
+		private const string StatusCannotDownloadInvalidDir = "Cannot download: invalid local directory";
+		private const string StatusInitializationFailedFormat = "Initialization failed: {0}";
+		private const string StatusErrorDownloadingFormat = "Error downloading files: {0}";
+		private const string StatusErrorProcessingDragDropFormat = "Error processing drag and drop: {0}";
+		private const string StatusErrorExternalFileDropFormat = "Error processing external file drop: {0}";
+		
+		// File/Folder Names
+		private const string ParentDirectoryName = "..";
+		private const string FolderDisplaySize = "Folder";
+		
 		private readonly MainWindowViewModel _viewModel;
 		private readonly IS3Service _s3Service;
 		private readonly ICompressionService _compressionService;
@@ -41,8 +83,19 @@ namespace EJRASync.UI {
 			RemoteFilesDataGrid.DragOver += RemoteFilesDataGrid_DragOver;
 			RemoteFilesDataGrid.Drop += RemoteFilesDataGrid_Drop;
 			
-			// Pre-initialize context menus to avoid slow first-time opening
-			InitializeContextMenus();
+			// Warm up files context menus
+			this.Loaded += (s, e) => {
+				Dispatcher.BeginInvoke(new Action(() => {
+					if (LocalFilesDataGrid.ContextMenu != null) {
+						LocalFilesDataGrid.ContextMenu.IsOpen = true;
+						LocalFilesDataGrid.ContextMenu.IsOpen = false;
+					}
+					if (RemoteFilesDataGrid.ContextMenu != null) {
+						RemoteFilesDataGrid.ContextMenu.IsOpen = true;
+						RemoteFilesDataGrid.ContextMenu.IsOpen = false;
+					}
+				}), System.Windows.Threading.DispatcherPriority.Loaded);
+			};
 		}
 
 
@@ -50,7 +103,7 @@ namespace EJRASync.UI {
 			_ = Task.Run(async () => {
 				try {
 					await this.InvokeUIAsync(() => {
-						_viewModel.StatusMessage = "Initializing...";
+						_viewModel.StatusMessage = StatusInitializing;
 					});
 
 					await _viewModel.InitializeAsync();
@@ -58,40 +111,14 @@ namespace EJRASync.UI {
 					await _viewModel.RemoteFiles.LoadBucketsAsync();
 
 					await this.InvokeUIAsync(() => {
-						_viewModel.StatusMessage = "Ready";
+						_viewModel.StatusMessage = StatusReady;
 					});
 				} catch (Exception ex) {
 					await this.InvokeUIAsync(() => {
-						_viewModel.StatusMessage = $"Initialization failed: {ex.Message}";
+						_viewModel.StatusMessage = string.Format(StatusInitializationFailedFormat, ex.Message);
 					});
 				}
 			});
-		}
-
-		private void InitializeContextMenus() {
-			try {
-				// Force creation and initialization of context menus by accessing them
-				if (LocalFilesDataGrid.ContextMenu != null) {
-					LocalFilesDataGrid.ContextMenu.DataContext = DataContext;
-					LocalFilesDataGrid.ContextMenu.UpdateLayout();
-					// Force measure and arrange to initialize bindings
-					LocalFilesDataGrid.ContextMenu.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-					LocalFilesDataGrid.ContextMenu.Arrange(new Rect(LocalFilesDataGrid.ContextMenu.DesiredSize));
-				}
-				
-				// Initialize the remote file context menu resource
-				if (FindResource("RemoteFileContextMenu") is ContextMenu remoteContextMenu) {
-					remoteContextMenu.DataContext = DataContext;
-					remoteContextMenu.UpdateLayout();
-					// Force measure and arrange to initialize bindings
-					remoteContextMenu.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-					remoteContextMenu.Arrange(new Rect(remoteContextMenu.DesiredSize));
-				}
-			}
-			catch (Exception ex) {
-				// Ignore any errors during pre-initialization
-				System.Diagnostics.Debug.WriteLine($"Context menu pre-initialization error: {ex.Message}");
-			}
 		}
 
 		private void LocalFilesDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -167,18 +194,18 @@ namespace EJRASync.UI {
 				if (sourceDataGrid == LocalFilesDataGrid) {
 					// Dragging from local files
 					var localFiles = LocalFilesDataGrid.SelectedItems.Cast<LocalFileItem>().ToList();
-					var filePaths = localFiles.Where(f => !f.IsDirectory && f.Name != "..").Select(f => f.FullPath).ToArray();
+					var filePaths = localFiles.Where(f => !f.IsDirectory && f.Name != ParentDirectoryName).Select(f => f.FullPath).ToArray();
 					
-					if (filePaths.Any() || localFiles.Any(f => f.IsDirectory && f.Name != "..")) {
+					if (filePaths.Any() || localFiles.Any(f => f.IsDirectory && f.Name != ParentDirectoryName)) {
 						dataObject.SetData(DataFormats.FileDrop, filePaths);
-						dataObject.SetData("LocalFiles", localFiles);
+						dataObject.SetData(DataKeyLocalFiles, localFiles);
 						DragDrop.DoDragDrop(sourceDataGrid, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 					}
 				} else if (sourceDataGrid == RemoteFilesDataGrid) {
 					// Dragging from remote files
-					var remoteFiles = RemoteFilesDataGrid.SelectedItems.Cast<RemoteFileItem>().Where(f => f.Name != "..").ToList();
+					var remoteFiles = RemoteFilesDataGrid.SelectedItems.Cast<RemoteFileItem>().Where(f => f.Name != ParentDirectoryName).ToList();
 					if (remoteFiles.Any()) {
-						dataObject.SetData("RemoteFiles", remoteFiles);
+						dataObject.SetData(DataKeyRemoteFiles, remoteFiles);
 						DragDrop.DoDragDrop(sourceDataGrid, dataObject, DragDropEffects.Copy | DragDropEffects.Move);
 					}
 				}
@@ -190,7 +217,7 @@ namespace EJRASync.UI {
 
 		private void LocalFilesDataGrid_DragOver(object sender, DragEventArgs e) {
 			// Allow dropping files from Windows Explorer or remote files for download
-			if (e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent("RemoteFiles")) {
+			if (e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent(DataKeyRemoteFiles)) {
 				e.Effects = DragDropEffects.Copy;
 			} else {
 				e.Effects = DragDropEffects.None;
@@ -199,9 +226,9 @@ namespace EJRASync.UI {
 		}
 
 		private async void LocalFilesDataGrid_Drop(object sender, DragEventArgs e) {
-			if (e.Data.GetDataPresent("RemoteFiles")) {
+			if (e.Data.GetDataPresent(DataKeyRemoteFiles)) {
 				// Internal drag from remote files - download to local
-				var remoteFiles = e.Data.GetData("RemoteFiles") as List<RemoteFileItem>;
+				var remoteFiles = e.Data.GetData(DataKeyRemoteFiles) as List<RemoteFileItem>;
 				if (remoteFiles?.Any() == true) {
 					await HandleRemoteToLocalDrop(remoteFiles);
 				}
@@ -215,7 +242,7 @@ namespace EJRASync.UI {
 
 		private void RemoteFilesDataGrid_DragOver(object sender, DragEventArgs e) {
 			// Allow dropping local files for upload
-			if (e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent("LocalFiles")) {
+			if (e.Data.GetDataPresent(DataFormats.FileDrop) || e.Data.GetDataPresent(DataKeyLocalFiles)) {
 				e.Effects = DragDropEffects.Copy;
 			} else {
 				e.Effects = DragDropEffects.None;
@@ -224,9 +251,9 @@ namespace EJRASync.UI {
 		}
 
 		private async void RemoteFilesDataGrid_Drop(object sender, DragEventArgs e) {
-			if (e.Data.GetDataPresent("LocalFiles")) {
+			if (e.Data.GetDataPresent(DataKeyLocalFiles)) {
 				// Internal drag from local files
-				var localFiles = e.Data.GetData("LocalFiles") as List<LocalFileItem>;
+				var localFiles = e.Data.GetData(DataKeyLocalFiles) as List<LocalFileItem>;
 				if (localFiles?.Any() == true) {
 					await HandleInternalFileDrop(localFiles);
 				}
@@ -241,7 +268,7 @@ namespace EJRASync.UI {
 		private async Task HandleRemoteToLocalDrop(List<RemoteFileItem> remoteFiles) {
 			try {
 				if (string.IsNullOrEmpty(_viewModel.NavigationContext.SelectedBucket)) {
-					_viewModel.StatusMessage = "Cannot download: no bucket selected";
+					_viewModel.StatusMessage = StatusCannotDownloadNoBucket;
 					return;
 				}
 
@@ -250,14 +277,18 @@ namespace EJRASync.UI {
 				var localCurrentPath = _viewModel.NavigationContext.LocalCurrentPath;
 
 				if (string.IsNullOrEmpty(localCurrentPath) || !Directory.Exists(localCurrentPath)) {
-					_viewModel.StatusMessage = "Cannot download: invalid local directory";
+					_viewModel.StatusMessage = StatusCannotDownloadInvalidDir;
 					return;
 				}
 
-				_viewModel.StatusMessage = "Downloading files...";
+				_viewModel.StatusMessage = StatusDownloadingFiles;
+				_viewModel.ProgressValue = 0;
 				var downloadedCount = 0;
+				var filesToDownload = remoteFiles.Where(f => !f.IsDirectory).ToList();
+				var totalFiles = filesToDownload.Count;
 
-				foreach (var file in remoteFiles.Where(f => !f.IsDirectory)) {
+				for (int i = 0; i < filesToDownload.Count; i++) {
+					var file = filesToDownload[i];
 					try {
 						var remoteKey = string.IsNullOrEmpty(currentRemotePath) 
 							? file.Key 
@@ -265,38 +296,51 @@ namespace EJRASync.UI {
 
 						var localFilePath = Path.Combine(localCurrentPath, file.Name);
 						
-						// Download the file
-						var fileData = await _s3Service.DownloadObjectAsync(bucketName, remoteKey);
+						_viewModel.StatusMessage = string.Format(StatusDownloadingFileFormat, file.Name, i + 1, totalFiles);
+						
+						// Create progress reporter for this file
+						var progress = new Progress<long>(bytesRead => {
+							// Update progress based on file progress within overall download progress
+							var fileProgressPercent = file.SizeBytes > 0 ? (double)bytesRead / file.SizeBytes * 100 : 100;
+							var overallProgress = ((double)i / totalFiles * 100) + (fileProgressPercent / totalFiles);
+							_viewModel.ProgressValue = Math.Min(overallProgress, 100);
+						});
 						
 						// Check if file needs decompression (has original-hash metadata)
 						if (file.IsCompressed && !string.IsNullOrEmpty(file.OriginalHash)) {
-							// Decompress the file
-							var tempCompressedFile = Path.GetTempFileName();
-							await File.WriteAllBytesAsync(tempCompressedFile, fileData);
+							// Download to temp file and decompress
+							var tempCompressedFile = await _s3Service.DownloadObjectAsync(bucketName, remoteKey, null, progress);
 							
-							await _compressionService.DecompressFileAsync(tempCompressedFile, localFilePath);
-							
-							// Clean up temp file
-							if (File.Exists(tempCompressedFile)) {
-								File.Delete(tempCompressedFile);
+							try {
+								await _compressionService.DecompressFileAsync(tempCompressedFile, localFilePath);
+							} finally {
+								// Clean up temp file
+								if (File.Exists(tempCompressedFile)) {
+									File.Delete(tempCompressedFile);
+								}
 							}
 						} else {
-							// Write raw file
-							await File.WriteAllBytesAsync(localFilePath, fileData);
+							// Download directly to destination
+							using (var fileStream = new FileStream(localFilePath, FileMode.Create, FileAccess.Write)) {
+								await _s3Service.DownloadObjectAsync(bucketName, remoteKey, fileStream, progress);
+							}
 						}
 
 						downloadedCount++;
+						_viewModel.ProgressValue = (double)(i + 1) / totalFiles * 100;
 					} catch (Exception ex) {
 						System.Diagnostics.Debug.WriteLine($"Error downloading {file.Name}: {ex.Message}");
 					}
 				}
 
-				_viewModel.StatusMessage = $"Downloaded {downloadedCount} files";
+				_viewModel.StatusMessage = string.Format(StatusDownloadedFilesFormat, downloadedCount);
+				_viewModel.ProgressValue = 0;
 				
 				// Refresh local file list to show new files
 				await _viewModel.LocalFiles.LoadFilesAsync(localCurrentPath);
 			} catch (Exception ex) {
-				_viewModel.StatusMessage = $"Error downloading files: {ex.Message}";
+				_viewModel.StatusMessage = string.Format(StatusErrorDownloadingFormat, ex.Message);
+				_viewModel.ProgressValue = 0;
 			}
 		}
 
@@ -310,7 +354,7 @@ namespace EJRASync.UI {
 				if (result != true) return;
 
 				// Process files based on user choice
-				foreach (var file in localFiles.Where(f => f.Name != "..")) {
+				foreach (var file in localFiles.Where(f => f.Name != ParentDirectoryName)) {
 					if (dialog.Result == UploadConfirmationDialog.UploadMethod.Compress) {
 						if (file.IsDirectory) {
 							await _viewModel.LocalFiles.ProcessDirectoryForCompressAndUpload(file.FullPath);
@@ -326,9 +370,9 @@ namespace EJRASync.UI {
 					}
 				}
 
-				_viewModel.StatusMessage = $"Added {localFiles.Count} items for upload";
+				_viewModel.StatusMessage = string.Format(StatusUploadItemsFormat, localFiles.Count);
 			} catch (Exception ex) {
-				_viewModel.StatusMessage = $"Error processing drag and drop: {ex.Message}";
+				_viewModel.StatusMessage = string.Format(StatusErrorProcessingDragDropFormat, ex.Message);
 			}
 		}
 
@@ -356,7 +400,7 @@ namespace EJRASync.UI {
 							SizeBytes = 0,
 							LastModified = dirInfo.LastWriteTime,
 							IsDirectory = true,
-							DisplaySize = "Folder"
+							DisplaySize = FolderDisplaySize
 						});
 					}
 				}
@@ -365,7 +409,7 @@ namespace EJRASync.UI {
 					await HandleInternalFileDrop(localFiles);
 				}
 			} catch (Exception ex) {
-				_viewModel.StatusMessage = $"Error processing external file drop: {ex.Message}";
+				_viewModel.StatusMessage = string.Format(StatusErrorExternalFileDropFormat, ex.Message);
 			}
 		}
 
@@ -384,9 +428,9 @@ namespace EJRASync.UI {
 		}
 
 		private string FormatFileSize(long bytes) {
-			if (bytes == 0) return "0 B";
+			if (bytes == 0) return ZeroByteFileSize;
 
-			string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+			var suffixes = FileSizeSuffixes;
 			int suffixIndex = 0;
 			double size = bytes;
 
@@ -399,6 +443,85 @@ namespace EJRASync.UI {
 		}
 
 		// Helper method to find ancestor of specific type in visual tree
+		private void RemoteFilesDataGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) {
+			var dataGrid = sender as DataGrid;
+			var contextMenu = dataGrid?.ContextMenu;
+			
+			if (contextMenu == null) return;
+			
+			// Clear existing items
+			contextMenu.Items.Clear();
+			
+			// Get the selected file from the PlacementTarget to avoid visual tree searches
+			var selectedFile = _viewModel.RemoteFiles.SelectedFile;
+			if (selectedFile == null) {
+				e.Handled = true;
+				return;
+			}
+			
+			// Set explicit DataContext to avoid inheritance issues
+			contextMenu.DataContext = _viewModel;
+			
+			// Build context menu items based on the selected file
+			if (selectedFile.IsDirectory) {
+				// Tag as Active menu item
+				if (!selectedFile.IsActive.HasValue || selectedFile.IsActive == false) {
+					var tagActiveItem = new MenuItem {
+						Header = MenuTagAsActive,
+						Background = new SolidColorBrush(MenuBackgroundColor),
+						Foreground = new SolidColorBrush(MenuForegroundColor),
+						Command = _viewModel.RemoteFiles.TagAsActiveCommand,
+						CommandParameter = selectedFile,
+						IsEnabled = _viewModel.HasWriteAccess
+					};
+					tagActiveItem.Icon = new Image {
+						Source = new BitmapImage(new Uri(IconCheckSquare, UriKind.Relative)),
+						Width = 16,
+						Height = 16
+					};
+					contextMenu.Items.Add(tagActiveItem);
+				}
+				
+				// Tag as Inactive menu item
+				if (selectedFile.IsActive == true) {
+					var tagInactiveItem = new MenuItem {
+						Header = MenuTagAsInactive,
+						Background = new SolidColorBrush(MenuBackgroundColor),
+						Foreground = new SolidColorBrush(MenuForegroundColor),
+						Command = _viewModel.RemoteFiles.TagAsActiveCommand,
+						CommandParameter = selectedFile,
+						IsEnabled = _viewModel.HasWriteAccess
+					};
+					tagInactiveItem.Icon = new Image {
+						Source = new BitmapImage(new Uri(IconSubtractSquare, UriKind.Relative)),
+						Width = 16,
+						Height = 16
+					};
+					contextMenu.Items.Add(tagInactiveItem);
+				}
+				
+				if (contextMenu.Items.Count > 0) {
+					contextMenu.Items.Add(new Separator { Background = new SolidColorBrush(SeparatorBackgroundColor) });
+				}
+			}
+			
+			// Delete menu item (for all file types)
+			var deleteItem = new MenuItem {
+				Header = MenuDelete,
+				Background = new SolidColorBrush(MenuBackgroundColor),
+				Foreground = new SolidColorBrush(MenuForegroundColor),
+				Command = _viewModel.RemoteFiles.DeleteRemoteFileCommand,
+				CommandParameter = selectedFile,
+				IsEnabled = _viewModel.HasWriteAccess
+			};
+			deleteItem.Icon = new Image {
+				Source = new BitmapImage(new Uri(IconDelete, UriKind.Relative)),
+				Width = 16,
+				Height = 16
+			};
+			contextMenu.Items.Add(deleteItem);
+		}
+		
 		private static T FindAncestor<T>(DependencyObject current) where T : DependencyObject {
 			do {
 				if (current is T) {

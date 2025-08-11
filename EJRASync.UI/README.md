@@ -5,8 +5,6 @@
 - .NET 8.0 SDK
 
 ### TODO
-- [ ] Fix right click context menu opening slowly on the first time
-    - Perhaps preload the xaml and initialize the bindings without showing
 - [ ] Scan Changes needs work
     - [ ] Maybe rename this to Scan Local Changes
 - [ ] Add a read-only view (default on open)

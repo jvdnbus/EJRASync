@@ -15,6 +15,7 @@
         <local:BooleanToOpacityConverter x:Key="BooleanToOpacityConverter"/>
         <local:DateTimeToStringConverter x:Key="DateTimeToStringConverter"/>
         <local:ContextMenuVisibilityConverter x:Key="ContextMenuVisibilityConverter"/>
+        <local:OrBooleanToVisibilityConverter x:Key="OrBooleanToVisibilityConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         
         <!-- Dark ScrollBar Styles -->
@@ -299,7 +300,7 @@
                 <Button Command="{Binding ScanChangesCommand}" 
                         Style="{StaticResource ModernButtonStyle}"
                         HorizontalAlignment="Left"
-                        Margin="0,0,12,0">
+                        Margin="0,0,12,0" IsEnabled="False">
                     <StackPanel Orientation="Horizontal">
                         <Image Source="/Assets/Icons/search.png" Width="16" Height="16" Margin="0,0,8,0"/>
                         <TextBlock Text="Scan Changes" VerticalAlignment="Center"/>
@@ -488,7 +489,9 @@
                              CanUserReorderColumns="False"
                              CanUserResizeRows="False"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ScrollViewer.CanContentScroll="False"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
                              IsEnabled="{Binding LocalFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
                              Opacity="{Binding LocalFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
                              Background="#1E1E1E"
@@ -635,6 +638,7 @@
                              ItemsSource="{Binding RemoteFiles.Files}"
                              SelectedItem="{Binding RemoteFiles.SelectedFile}"
                              x:Name="RemoteFilesDataGrid"
+                             ContextMenuOpening="RemoteFilesDataGrid_ContextMenuOpening"
                              AutoGenerateColumns="False"
                              GridLinesVisibility="None"
                              HeadersVisibility="Column"
@@ -645,7 +649,9 @@
                              CanUserReorderColumns="False"
                              CanUserResizeRows="False"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ScrollViewer.CanContentScroll="False"
+                             ScrollViewer.CanContentScroll="True"
+                             VirtualizingPanel.IsVirtualizing="True"
+                             VirtualizingPanel.VirtualizationMode="Recycling"
                              IsEnabled="{Binding RemoteFiles.IsLoading, Converter={StaticResource InverseBooleanConverter}}"
                              Opacity="{Binding RemoteFiles.IsLoading, Converter={StaticResource BooleanToOpacityConverter}}"
                              Background="#1E1E1E"
@@ -730,10 +736,8 @@
                         </DataGrid.RowStyle>
                         
                         <DataGrid.ContextMenu>
-                            <MultiBinding Converter="{StaticResource ContextMenuVisibilityConverter}" 
-                                          ConverterParameter="{StaticResource RemoteFileContextMenu}">
-                                <Binding Path="NavigationContext.SelectedBucket"/>
-                            </MultiBinding>
+                            <ContextMenu x:Name="RemoteFileContextMenuInGrid" Background="#2D2D30" BorderBrush="#3E3E42">
+                            </ContextMenu>
                         </DataGrid.ContextMenu>
 
                         <DataGrid.InputBindings>
@@ -935,7 +939,7 @@
                           Foreground="#F0F0F0"/>
 
                 <Button Grid.Column="1" 
-                        Command="{Binding CancelApplyChangesCommand}"
+                        Command="{Binding CancelOperationCommand}"
                         Background="#3E3E42"
                         Foreground="#CCCCCC"
                         BorderBrush="#555555"
@@ -943,8 +947,13 @@
                         Width="24"
                         Height="24"
                         Margin="8,0,8,0"
-                        ToolTip="Cancel operation"
-                        Visibility="{Binding IsApplying, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        ToolTip="Cancel operation">
+                    <Button.Visibility>
+                        <MultiBinding Converter="{StaticResource OrBooleanToVisibilityConverter}">
+                            <Binding Path="IsScanning"/>
+                            <Binding Path="IsApplying"/>
+                        </MultiBinding>
+                    </Button.Visibility>
                     <Image Source="/Assets/Icons/delete.png" Width="12" Height="12"/>
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
@@ -992,9 +1001,47 @@
                                         <Rectangle Name="Indicator" 
                                                    Fill="{TemplateBinding Foreground}"
                                                    RadiusX="3" RadiusY="3"/>
+                                        <Rectangle Name="IndeterminateIndicator" 
+                                                   Fill="{TemplateBinding Foreground}"
+                                                   RadiusX="3" RadiusY="3"
+                                                   Width="30"
+                                                   HorizontalAlignment="Left"
+                                                   Visibility="Collapsed">
+                                            <Rectangle.RenderTransform>
+                                                <TranslateTransform x:Name="IndeterminateTransform"/>
+                                            </Rectangle.RenderTransform>
+                                        </Rectangle>
                                     </Grid>
                                 </Grid>
                             </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsIndeterminate" Value="True">
+                                    <Setter TargetName="Indicator" Property="Visibility" Value="Collapsed"/>
+                                    <Setter TargetName="IndeterminateIndicator" Property="Visibility" Value="Visible"/>
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard RepeatBehavior="Forever">
+                                                <DoubleAnimation Storyboard.TargetName="IndeterminateTransform"
+                                                               Storyboard.TargetProperty="X"
+                                                               From="-30"
+                                                               To="200"
+                                                               Duration="0:0:1.5"
+                                                               AutoReverse="False"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="IndeterminateTransform"
+                                                               Storyboard.TargetProperty="X"
+                                                               To="0"
+                                                               Duration="0:0:0"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </ProgressBar.Template>
                 </ProgressBar>
