@@ -5,11 +5,10 @@
 - .NET 8.0 SDK
 
 ### TODO
-- [ ] Drag-n-drop from and to file lists
-    - Asks confirmation to compress before upload [Yes] [No] [Cancel]
-- [ ] Select multiple items in the file lists
-    - Every action should be done on each selected item
-- [ ] Fix delete item(s). Currently does not do anything on remote.
-- [ ] Fix context menu opening slowly at first
+- [ ] Fix right click context menu opening slowly on the first time
     - Perhaps preload the xaml and initialize the bindings without showing
-
+- [ ] Scan Changes needs work
+    - [ ] Maybe rename this to Scan Local Changes
+- [ ] Add a read-only view (default on open)
+    - [ ] Once write access is acquired, the view changes to what it currently is
+    - [ ] Only show a simple "Sync" button that will do what the CLI does

@@ -173,34 +173,60 @@ namespace EJRASync.UI {
 		}
 
 		private async Task ScanBucketChangesAsync(string bucketName, string localPath) {
-			var localFiles = await _fileService.GetLocalFilesAsync(localPath);
-			var remoteFiles = await _s3Service.ListObjectsAsync(bucketName);
+			// First, get the list of existing remote directories (top-level folders in the bucket)
+			var remoteItems = await _s3Service.ListObjectsAsync(bucketName);
+			var remoteDirs = remoteItems.Where(item => item.IsDirectory).Select(dir => dir.Name).ToList();
 
-			foreach (var localFile in localFiles.Where(f => !f.IsDirectory)) {
-				var relativePath = Path.GetRelativePath(localPath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
-				var remoteFile = remoteFiles.FirstOrDefault(r => r.Key == relativePath);
+			// Collect all files from all remote directories and their corresponding local files
+			var allRemoteFiles = new List<RemoteFileItem>();
+			var allLocalFiles = new List<LocalFileItem>();
 
-				if (remoteFile == null) {
-					// File doesn't exist remotely - needs upload
-					AddUploadChange(bucketName, localFile, relativePath);
-				} else {
+			foreach (var remoteDir in remoteDirs) {
+				var localDirPath = Path.Combine(localPath, remoteDir);
+				
+				// Only scan if the corresponding local directory exists
+				if (Directory.Exists(localDirPath)) {
+					// Get all files in this remote directory recursively (no delimiter to get nested files)
+					var remoteDirFiles = await _s3Service.ListObjectsAsync(bucketName, remoteDir);
+					allRemoteFiles.AddRange(remoteDirFiles.Where(f => !f.IsDirectory));
+					
+					// Get all local files in this directory recursively
+					var localDirFiles = await _fileService.GetLocalFilesAsync(localDirPath);
+					allLocalFiles.AddRange(localDirFiles.Where(f => !f.IsDirectory));
+				}
+			}
+
+			// Now batch process all collected files in a non-recursive manner
+			await ProcessFileComparisonBatch(bucketName, localPath, allLocalFiles, allRemoteFiles);
+		}
+
+		private async Task ProcessFileComparisonBatch(string bucketName, string basePath, List<LocalFileItem> localFiles, List<RemoteFileItem> remoteFiles) {
+			// Create a dictionary for faster remote file lookup by key
+			var remoteFilesByKey = remoteFiles.ToDictionary(r => r.Key, r => r);
+
+			// Process each local file against the remote files
+			foreach (var localFile in localFiles) {
+				var relativePath = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
+				
+				if (remoteFilesByKey.TryGetValue(relativePath, out var remoteFile)) {
 					// File exists - check if changed
 					var localHash = await _fileService.CalculateFileHashAsync(localFile.FullPath);
 					var remoteOriginalHash = remoteFile.OriginalHash;
 
 					if (remoteOriginalHash == null || localHash != remoteOriginalHash) {
-						AddUploadChange(bucketName, localFile, relativePath);
+						AddUploadChange(bucketName, basePath, localFile, relativePath);
 					}
+				} else {
+					// File doesn't exist remotely - needs upload
+					AddUploadChange(bucketName, basePath, localFile, relativePath);
 				}
 			}
 		}
 
-		private void AddUploadChange(string bucketName, LocalFileItem localFile, string remoteKey) {
+		private void AddUploadChange(string bucketName, string basePath, LocalFileItem localFile, string remoteKey) {
 			var shouldCompress = _compressionService.ShouldCompress(localFile.Name, localFile.SizeBytes);
 			var changeType = shouldCompress ? ChangeType.CompressAndUpload : ChangeType.RawUpload;
-			var description = shouldCompress
-				? $"Compress and upload {localFile.Name}"
-				: $"Upload {localFile.Name}";
+			var description = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
 
 			PendingChanges.Add(new PendingChange {
 				Type = changeType,
@@ -351,6 +377,9 @@ namespace EJRASync.UI {
 				case ChangeType.UpdateYaml:
 					await ProcessYamlUpdateAsync(change, cancellationToken);
 					break;
+				case ChangeType.DeleteRemote:
+					await ProcessDeleteRemoteAsync(change, cancellationToken);
+					break;
 			}
 		}
 
@@ -390,6 +419,28 @@ namespace EJRASync.UI {
 			var yamlData = await _contentStatusService.GenerateYamlAsync(change.BucketName);
 			cancellationToken.ThrowIfCancellationRequested();
 			await _s3Service.UploadDataAsync(change.BucketName, change.RemoteKey, yamlData);
+		}
+
+		private async Task ProcessDeleteRemoteAsync(PendingChange change, CancellationToken cancellationToken = default) {
+			cancellationToken.ThrowIfCancellationRequested();
+			
+			// Check if we're deleting a folder (ends with / or is a directory prefix)
+			// For folders, we need to use recursive deletion to remove all objects under that prefix
+			if (change.RemoteKey.EndsWith("/")) {
+				// It's a folder - use recursive deletion
+				await _s3Service.DeleteObjectsRecursiveAsync(change.BucketName, change.RemoteKey);
+			} else {
+				// Check if this key represents a directory by looking for objects with this prefix
+				var objectsWithPrefix = await _s3Service.ListObjectsAsync(change.BucketName, change.RemoteKey + "/");
+				
+				if (objectsWithPrefix.Any()) {
+					// It's a folder that doesn't end with / but has child objects - use recursive deletion
+					await _s3Service.DeleteObjectsRecursiveAsync(change.BucketName, change.RemoteKey + "/");
+				}
+				
+				// Also delete the individual object (could be both a file and a prefix)
+				await _s3Service.DeleteObjectAsync(change.BucketName, change.RemoteKey);
+			}
 		}
 
 		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;

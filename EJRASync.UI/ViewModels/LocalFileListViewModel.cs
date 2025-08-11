@@ -22,6 +22,9 @@ namespace EJRASync.UI.ViewModels {
 		private LocalFileItem? _selectedFile;
 
 		[ObservableProperty]
+		private ObservableCollection<LocalFileItem> _selectedFiles = new();
+
+		[ObservableProperty]
 		private bool _isLoading = false;
 
 		public LocalFileListViewModel(IFileService fileService, MainWindowViewModel mainViewModel) {
@@ -86,17 +89,21 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private async void CompressAndUpload(LocalFileItem? file) {
-			if (file == null)
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
+			
+			if (!filesToProcess.Any())
 				return;
 
-			if (file.IsDirectory) {
-				await ProcessDirectoryForCompressAndUpload(file.FullPath);
-			} else {
-				ProcessFileForCompressAndUpload(file);
+			foreach (var item in filesToProcess) {
+				if (item.IsDirectory) {
+					await ProcessDirectoryForCompressAndUpload(item.FullPath);
+				} else {
+					ProcessFileForCompressAndUpload(item);
+				}
 			}
 		}
 
-		private async Task ProcessDirectoryForCompressAndUpload(string directoryPath) {
+		public async Task ProcessDirectoryForCompressAndUpload(string directoryPath) {
 			var bucketName = DetermineBucketName(directoryPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -124,7 +131,7 @@ namespace EJRASync.UI.ViewModels {
 			}
 		}
 
-		private void ProcessFileForCompressAndUpload(LocalFileItem file) {
+		public void ProcessFileForCompressAndUpload(LocalFileItem file) {
 			var bucketName = DetermineBucketName(file.FullPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -145,17 +152,21 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private async void RawUpload(LocalFileItem? file) {
-			if (file == null)
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
+			
+			if (!filesToProcess.Any())
 				return;
 
-			if (file.IsDirectory) {
-				await ProcessDirectoryForRawUpload(file.FullPath);
-			} else {
-				ProcessFileForRawUpload(file);
+			foreach (var item in filesToProcess) {
+				if (item.IsDirectory) {
+					await ProcessDirectoryForRawUpload(item.FullPath);
+				} else {
+					ProcessFileForRawUpload(item);
+				}
 			}
 		}
 
-		private async Task ProcessDirectoryForRawUpload(string directoryPath) {
+		public async Task ProcessDirectoryForRawUpload(string directoryPath) {
 			var bucketName = DetermineBucketName(directoryPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -183,7 +194,7 @@ namespace EJRASync.UI.ViewModels {
 			}
 		}
 
-		private void ProcessFileForRawUpload(LocalFileItem file) {
+		public void ProcessFileForRawUpload(LocalFileItem file) {
 			var bucketName = DetermineBucketName(file.FullPath);
 			if (string.IsNullOrEmpty(bucketName))
 				return;
@@ -204,18 +215,22 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private void ViewInExplorer(LocalFileItem? file) {
-			if (file == null)
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
+			
+			if (!filesToProcess.Any())
 				return;
 
-			try {
-				var windowsPath = file.FullPath.Replace('/', '\\');
-				if (file.IsDirectory) {
-					Process.Start("explorer.exe", windowsPath);
-				} else {
-					Process.Start("explorer.exe", $"/select,\"{windowsPath}\"");
+			foreach (var item in filesToProcess) {
+				try {
+					var windowsPath = item.FullPath.Replace('/', '\\');
+					if (item.IsDirectory) {
+						Process.Start("explorer.exe", windowsPath);
+					} else {
+						Process.Start("explorer.exe", $"/select,\"{windowsPath}\"");
+					}
+				} catch (Exception ex) {
+					Console.WriteLine($"Error opening explorer: {ex.Message}");
 				}
-			} catch (Exception ex) {
-				Console.WriteLine($"Error opening explorer: {ex.Message}");
 			}
 		}
 

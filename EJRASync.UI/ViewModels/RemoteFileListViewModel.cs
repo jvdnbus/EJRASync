@@ -22,6 +22,9 @@ namespace EJRASync.UI.ViewModels {
 		private RemoteFileItem? _selectedFile;
 
 		[ObservableProperty]
+		private ObservableCollection<RemoteFileItem> _selectedFiles = new();
+
+		[ObservableProperty]
 		private bool _isLoading = false;
 
 		public RemoteFileListViewModel(
@@ -178,15 +181,19 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private async Task TagAsActiveAsync(RemoteFileItem? file) {
-			if (file == null || !file.IsDirectory || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.Where(f => f.IsDirectory).ToList() : (file != null && file.IsDirectory ? new List<RemoteFileItem> { file } : new List<RemoteFileItem>());
+			
+			if (!filesToProcess.Any() || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
 				return;
 
 			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
 			if (bucketName != EJRASync.Lib.Constants.CarsBucketName && bucketName != EJRASync.Lib.Constants.TracksBucketName)
 				return;
 
-			var isCurrentlyActive = file.IsActive ?? false;
-			await _contentStatusService.SetContentActiveAsync(bucketName, file.Name, !isCurrentlyActive);
+			foreach (var item in filesToProcess) {
+				var isCurrentlyActive = item.IsActive ?? false;
+				await _contentStatusService.SetContentActiveAsync(bucketName, item.Name, !isCurrentlyActive);
+			}
 
 			// Add pending change to update YAML
 			var yamlFileName = bucketName == EJRASync.Lib.Constants.CarsBucketName ? EJRASync.Lib.Constants.CarsYamlFile : EJRASync.Lib.Constants.TracksYamlFile;
@@ -268,7 +275,7 @@ namespace EJRASync.UI.ViewModels {
 						if (existingFile != null) {
 							// Update existing file/directory - these get "Pending" status
 							existingFile.IsPendingChange = true;
-							existingFile.Status = "(Pending)";
+							existingFile.Status = GetStatusFromChangeType(firstChange.Type);
 						} else if (firstChange.Type == ChangeType.CompressAndUpload || firstChange.Type == ChangeType.RawUpload) {
 							// Determine if this should be a directory or file based on the change
 							var changeKey = firstChange.RemoteKey.Replace('\\', '/');
@@ -290,22 +297,6 @@ namespace EJRASync.UI.ViewModels {
 					}
 				});
 			});
-		}
-
-		public void FlashCompletedChange(string changeId, string fileName) {
-			var file = Files.FirstOrDefault(f => f.Name == fileName);
-			if (file != null) {
-				file.IsFlashing = true;
-				file.IsPendingChange = false;
-				file.Status = "";
-				
-				// Reset flash after animation
-				Task.Delay(500).ContinueWith(_ => {
-					this.InvokeUIAsync(() => {
-						file.IsFlashing = false;
-					});
-				});
-			}
 		}
 
 		private bool IsChangeRelevantToCurrentDirectory(PendingChange change, string currentPath) {
@@ -339,10 +330,7 @@ namespace EJRASync.UI.ViewModels {
 
 		private string GetStatusFromChangeType(ChangeType changeType) {
 			return changeType switch {
-				ChangeType.CompressAndUpload => "(To be added)",
-				ChangeType.RawUpload => "(To be added)",
 				ChangeType.DeleteRemote => "(To be removed)",
-				ChangeType.UpdateYaml => "(Pending)",
 				_ => "(Pending)"
 			};
 		}
@@ -364,22 +352,27 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private void DeleteRemoteFile(RemoteFileItem? file) {
-			if (file == null || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.Where(f => f.Name != "..").ToList() : (file != null && file.Name != ".." ? new List<RemoteFileItem> { file } : new List<RemoteFileItem>());
+			
+			if (!filesToProcess.Any() || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
 				return;
 
 			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
-			var remoteKey = string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)
-				? file.Key
-				: $"{_mainViewModel.NavigationContext.RemoteCurrentPath}/{file.Key}";
+			
+			foreach (var item in filesToProcess) {
+				var remoteKey = string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)
+					? item.Key
+					: $"{_mainViewModel.NavigationContext.RemoteCurrentPath}/{item.Key}";
 
-			var change = new PendingChange {
-				Type = ChangeType.DeleteRemote,
-				Description = $"Delete {file.Name}",
-				RemoteKey = remoteKey,
-				BucketName = bucketName
-			};
+				var change = new PendingChange {
+					Type = ChangeType.DeleteRemote,
+					Description = $"Delete {item.Name}",
+					RemoteKey = remoteKey,
+					BucketName = bucketName
+				};
 
-			_mainViewModel.AddPendingChange(change);
+				_mainViewModel.AddPendingChange(change);
+			}
 		}
 
 	}

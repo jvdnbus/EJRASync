@@ -288,6 +288,49 @@ namespace EJRASync.UI.Services {
 			await _s3Client.DeleteObjectAsync(request);
 		}
 
+		public async Task DeleteObjectsRecursiveAsync(string bucketName, string keyPrefix) {
+			var objectsToDelete = new List<string>();
+			string? continuationToken = null;
+
+			// List all objects with the prefix recursively (no delimiter to get all nested objects)
+			do {
+				var request = new ListObjectsV2Request {
+					BucketName = bucketName,
+					Prefix = keyPrefix,
+					ContinuationToken = continuationToken
+				};
+
+				var response = await _s3Client.ListObjectsV2Async(request);
+
+				// Add all object keys to our deletion list
+				if (response.S3Objects != null) {
+					foreach (var obj in response.S3Objects) {
+						objectsToDelete.Add(obj.Key);
+					}
+				}
+
+				continuationToken = response.NextContinuationToken;
+			} while (continuationToken != null);
+
+			// If no objects to delete, return early
+			if (!objectsToDelete.Any()) {
+				return;
+			}
+
+			// Process deletions in batches of 1000 (AWS limit)
+			const int batchSize = 1000;
+			for (int i = 0; i < objectsToDelete.Count; i += batchSize) {
+				var batch = objectsToDelete.Skip(i).Take(batchSize).ToList();
+				
+				var deleteRequest = new DeleteObjectsRequest {
+					BucketName = bucketName,
+					Objects = batch.Select(key => new KeyVersion { Key = key }).ToList()
+				};
+
+				await _s3Client.DeleteObjectsAsync(deleteRequest);
+			}
+		}
+
 		public async Task<byte[]> DownloadObjectAsync(string bucketName, string key) {
 			var request = new GetObjectRequest {
 				BucketName = bucketName,
