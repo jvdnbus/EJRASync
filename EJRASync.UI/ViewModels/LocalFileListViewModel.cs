@@ -1,7 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EJRASync.UI.Models;
-using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -9,7 +8,7 @@ using System.IO;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class LocalFileListViewModel : ObservableObject {
-		private readonly IFileService _fileService;
+		private readonly Lib.Services.IFileService _fileService;
 		private readonly MainWindowViewModel _mainViewModel;
 
 		[ObservableProperty]
@@ -27,7 +26,7 @@ namespace EJRASync.UI.ViewModels {
 		[ObservableProperty]
 		private bool _isLoading = false;
 
-		public LocalFileListViewModel(IFileService fileService, MainWindowViewModel mainViewModel) {
+		public LocalFileListViewModel(Lib.Services.IFileService fileService, MainWindowViewModel mainViewModel) {
 			_fileService = fileService;
 			_mainViewModel = mainViewModel;
 		}
@@ -61,8 +60,8 @@ namespace EJRASync.UI.ViewModels {
 						});
 					}
 
-					foreach (var file in files) {
-						Files.Add(file);
+					foreach (var libFile in files) {
+						Files.Add(LocalFileItem.FromLib(libFile));
 					}
 
 					_mainViewModel.StatusMessage = "Ready";
@@ -90,7 +89,7 @@ namespace EJRASync.UI.ViewModels {
 		[RelayCommand]
 		private async void CompressAndUpload(LocalFileItem? file) {
 			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
-			
+
 			if (!filesToProcess.Any())
 				return;
 
@@ -111,7 +110,7 @@ namespace EJRASync.UI.ViewModels {
 			try {
 				// Collect all files from directory and subdirectories
 				var allFiles = await CollectAllFilesFromDirectory(directoryPath);
-				
+
 				if (!allFiles.Any()) {
 					_mainViewModel.StatusMessage = "No files found in directory";
 					return;
@@ -153,7 +152,7 @@ namespace EJRASync.UI.ViewModels {
 		[RelayCommand]
 		private async void RawUpload(LocalFileItem? file) {
 			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
-			
+
 			if (!filesToProcess.Any())
 				return;
 
@@ -174,7 +173,7 @@ namespace EJRASync.UI.ViewModels {
 			try {
 				// Collect all files from directory and subdirectories
 				var allFiles = await CollectAllFilesFromDirectory(directoryPath);
-				
+
 				if (!allFiles.Any()) {
 					_mainViewModel.StatusMessage = "No files found in directory";
 					return;
@@ -216,7 +215,7 @@ namespace EJRASync.UI.ViewModels {
 		[RelayCommand]
 		private void ViewInExplorer(LocalFileItem? file) {
 			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
-			
+
 			if (!filesToProcess.Any())
 				return;
 
@@ -237,7 +236,7 @@ namespace EJRASync.UI.ViewModels {
 		private string DetermineBucketName(string filePath) {
 			var basePath = _mainViewModel.NavigationContext.LocalBasePath;
 			var relativePath = Path.GetRelativePath(basePath, filePath);
-			
+
 			// Normalize path separators to handle both forward and back slashes
 			var normalizedRelativePath = relativePath.Replace('\\', '/');
 
@@ -282,14 +281,14 @@ namespace EJRASync.UI.ViewModels {
 
 			while (directoriesToProcess.Count > 0) {
 				var currentDirectory = directoriesToProcess.Dequeue();
-				
+
 				try {
 					var items = await _fileService.GetLocalFilesAsync(currentDirectory);
-					
+
 					// Add all files to the collection
-					var files = items.Where(f => !f.IsDirectory).ToList();
+					var files = items.Where(f => !f.IsDirectory).Select(LocalFileItem.FromLib).ToList();
 					allFiles.AddRange(files);
-					
+
 					// Queue up subdirectories for processing
 					var subdirectories = items.Where(f => f.IsDirectory && f.Name != "..").ToList();
 					foreach (var subdir in subdirectories) {

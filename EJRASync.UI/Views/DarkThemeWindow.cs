@@ -18,12 +18,12 @@ namespace EJRASync.UI.Views {
 			// Apply dark theme styling
 			Background = new System.Windows.Media.SolidColorBrush(
 				(System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1E1E1E"));
-			
+
 			// Wire up the event to set dark title bar when the window is ready
 			SourceInitialized += OnSourceInitialized;
 		}
 
-		private void OnSourceInitialized(object sender, EventArgs e) {
+		private void OnSourceInitialized(object? sender, EventArgs e) {
 			// Enable dark title bar on Windows 10/11
 			if (PresentationSource.FromVisual(this) is HwndSource hwndSource) {
 				var hwnd = hwndSource.Handle;
@@ -36,16 +36,15 @@ namespace EJRASync.UI.Views {
 		private void SetDarkTitleBar(IntPtr hwnd) {
 			try {
 				int darkMode = 1; // 1 for dark, 0 for light
-				
+
 				// Try the newer attribute first (Windows 11/10 20H1+)
 				int result = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkMode, sizeof(int));
-				
+
 				// If that fails, try the older attribute (Windows 10 before 20H1)
 				if (result != 0) {
 					DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE_BEFORE_20H1, ref darkMode, sizeof(int));
 				}
-			}
-			catch {
+			} catch {
 				// Silently fail on older Windows versions that don't support this
 			}
 		}

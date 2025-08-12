@@ -1,20 +1,20 @@
 using Amazon.S3;
 using Amazon.S3.Model;
-using EJRASync.UI.Models;
-using System.IO;
+using EJRASync.Lib.Models;
 using System.Collections.Concurrent;
 using System.Net;
-using System.Net.Http;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public class S3Service : IS3Service {
 		private IAmazonS3 _s3Client;
+		private readonly IHashStoreService _hashStoreService;
 		private readonly ConcurrentQueue<UploadRetryItem> _retryQueue = new();
 		private readonly Timer _retryTimer;
 		private readonly object _retryLock = new();
 
-		public S3Service(IAmazonS3 s3Client) {
+		public S3Service(IAmazonS3 s3Client, IHashStoreService hashStoreService) {
 			_s3Client = s3Client;
+			_hashStoreService = hashStoreService;
 			_retryTimer = new Timer(ProcessRetryQueue, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
 		}
 
@@ -35,7 +35,7 @@ namespace EJRASync.UI.Services {
 
 			try {
 				var itemsToRetry = new List<UploadRetryItem>();
-				
+
 				// Collect items ready for retry
 				while (_retryQueue.TryPeek(out var item)) {
 					if (DateTime.UtcNow >= item.NextRetryTime) {
@@ -55,12 +55,12 @@ namespace EJRASync.UI.Services {
 						} else if (item.Data != null) {
 							await UploadDataInternalAsync(item.BucketName, item.Key, item.Data, item.Metadata);
 						}
-						
+
 						item.TaskCompletion.SetResult(true);
 					} catch (Exception ex) {
 						item.RetryCount++;
 						item.LastException = ex;
-						
+
 						if (item.RetryCount >= 5) {
 							// Max retries exceeded
 							item.TaskCompletion.SetException(new Exception($"Upload failed after 5 retries: {ex.Message}", ex));
@@ -89,20 +89,19 @@ namespace EJRASync.UI.Services {
 			) || ex is HttpRequestException || ex is TaskCanceledException || ex is TimeoutException;
 		}
 
-		public async Task<List<RemoteFileItem>> ListObjectsAsync(string bucketName, string prefix = "", string delimiter = "/", CancellationToken cancellationToken = default) {
-			var items = new List<RemoteFileItem>();
-			string? continuationToken = null;
+		public async Task<List<RemoteFile>> ListObjectsAsync(string bucketName, string prefix = "", string delimiter = "/", CancellationToken cancellationToken = default) {
+			var items = new List<RemoteFile>();
 
-			do {
-				var request = new ListObjectsV2Request {
-					BucketName = bucketName,
-					Prefix = prefix,
-					Delimiter = delimiter,
-					ContinuationToken = continuationToken
-				};
+			var request = new ListObjectsV2Request {
+				BucketName = bucketName,
+				Prefix = prefix,
+				Delimiter = delimiter,
+				MaxKeys = 1000
+			};
 
-				var response = await _s3Client.ListObjectsV2Async(request, cancellationToken);
+			var paginator = _s3Client.Paginators.ListObjectsV2(request);
 
+			await foreach (var response in paginator.Responses.WithCancellation(cancellationToken)) {
 				// Add directories
 				if (response.CommonPrefixes != null) {
 					foreach (var commonPrefix in response.CommonPrefixes) {
@@ -110,7 +109,7 @@ namespace EJRASync.UI.Services {
 						if (name.Contains('/'))
 							name = name.Substring(name.LastIndexOf('/') + 1);
 
-						items.Add(new RemoteFileItem {
+						items.Add(new RemoteFile {
 							Name = name,
 							Key = commonPrefix,
 							IsDirectory = true,
@@ -129,11 +128,11 @@ namespace EJRASync.UI.Services {
 						if (name.Contains('/'))
 							name = name.Substring(name.LastIndexOf('/') + 1);
 
-						// Check if compressed by looking for metadata
-						var metadata = await GetObjectMetadataAsync(bucketName, obj.Key);
-						var isCompressed = metadata?.OriginalHash != null;
+						// Check if compressed by looking in hash store
+						var originalHash = _hashStoreService.GetOriginalHash(bucketName, obj.Key);
+						var isCompressed = originalHash != null;
 
-						items.Add(new RemoteFileItem {
+						items.Add(new RemoteFile {
 							Name = name,
 							Key = obj.Key,
 							DisplaySize = FormatFileSize(obj.Size ?? 0),
@@ -142,13 +141,11 @@ namespace EJRASync.UI.Services {
 							IsDirectory = false,
 							IsCompressed = isCompressed,
 							ETag = obj.ETag ?? "",
-							OriginalHash = metadata?.OriginalHash
+							OriginalHash = originalHash
 						});
 					}
 				}
-
-				continuationToken = response.NextContinuationToken;
-			} while (continuationToken != null);
+			}
 
 			return items.OrderByDescending(x => x.IsDirectory).ThenBy(x => x.Name).ToList();
 		}
@@ -158,7 +155,7 @@ namespace EJRASync.UI.Services {
 			return response.Buckets.Select(b => b.BucketName).ToList();
 		}
 
-		public async Task<RemoteFileItem?> GetObjectMetadataAsync(string bucketName, string key) {
+		public async Task<RemoteFile?> GetObjectMetadataAsync(string bucketName, string key) {
 			try {
 				var request = new GetObjectMetadataRequest {
 					BucketName = bucketName,
@@ -168,11 +165,9 @@ namespace EJRASync.UI.Services {
 				var response = await _s3Client.GetObjectMetadataAsync(request);
 
 				var name = key.Contains('/') ? key.Substring(key.LastIndexOf('/') + 1) : key;
-				var originalHash = response.Metadata.Keys.Contains("x-amz-meta-original-hash")
-					? response.Metadata["x-amz-meta-original-hash"]
-					: null;
+				var originalHash = _hashStoreService.GetOriginalHash(bucketName, key);
 
-				return new RemoteFileItem {
+				return new RemoteFile {
 					Name = name,
 					Key = key,
 					DisplaySize = FormatFileSize(response.ContentLength),
@@ -183,6 +178,24 @@ namespace EJRASync.UI.Services {
 					ETag = response.ETag ?? "",
 					OriginalHash = originalHash
 				};
+			} catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
+				return null;
+			}
+		}
+
+		public async Task<string?> GetObjectOriginalHashFromMetadataAsync(string bucketName, string key) {
+			try {
+				var request = new GetObjectMetadataRequest {
+					BucketName = bucketName,
+					Key = key
+				};
+
+				var response = await _s3Client.GetObjectMetadataAsync(request);
+
+				// Check for original hash in metadata (for rebuild purposes, bypass hash store)
+				return response.Metadata.Keys.Contains("x-amz-meta-original-hash")
+					? response.Metadata["x-amz-meta-original-hash"]
+					: null;
 			} catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
 				return null;
 			}
@@ -201,9 +214,9 @@ namespace EJRASync.UI.Services {
 						NextRetryTime = DateTime.UtcNow.AddSeconds(30), // First retry after 30 seconds
 						LastException = ex
 					};
-					
+
 					_retryQueue.Enqueue(retryItem);
-					
+
 					// Return the task that will complete when the retry succeeds or fails
 					await retryItem.TaskCompletion.Task;
 				} else {
@@ -225,6 +238,11 @@ namespace EJRASync.UI.Services {
 			if (metadata != null) {
 				foreach (var kvp in metadata) {
 					request.Metadata.Add(kvp.Key, kvp.Value);
+				}
+
+				// If this is a compressed file with original hash, add it to hash store
+				if (metadata.TryGetValue("original-hash", out var originalHash)) {
+					_hashStoreService.SetOriginalHash(bucketName, key, originalHash);
 				}
 			}
 
@@ -248,9 +266,9 @@ namespace EJRASync.UI.Services {
 						NextRetryTime = DateTime.UtcNow.AddSeconds(30), // First retry after 30 seconds
 						LastException = ex
 					};
-					
+
 					_retryQueue.Enqueue(retryItem);
-					
+
 					// Return the task that will complete when the retry succeeds or fails
 					await retryItem.TaskCompletion.Task;
 				} else {
@@ -274,6 +292,11 @@ namespace EJRASync.UI.Services {
 				foreach (var kvp in metadata) {
 					request.Metadata.Add(kvp.Key, kvp.Value);
 				}
+
+				// If this is a compressed file with original hash, add it to hash store
+				if (metadata.TryGetValue("original-hash", out var originalHash)) {
+					_hashStoreService.SetOriginalHash(bucketName, key, originalHash);
+				}
 			}
 
 			await _s3Client.PutObjectAsync(request);
@@ -286,31 +309,30 @@ namespace EJRASync.UI.Services {
 			};
 
 			await _s3Client.DeleteObjectAsync(request);
+
+			// Remove from hash store if it exists
+			_hashStoreService.RemoveHash(bucketName, key);
 		}
 
 		public async Task DeleteObjectsRecursiveAsync(string bucketName, string keyPrefix) {
 			var objectsToDelete = new List<string>();
-			string? continuationToken = null;
+
+			var request = new ListObjectsV2Request {
+				BucketName = bucketName,
+				Prefix = keyPrefix
+			};
+
+			var paginator = _s3Client.Paginators.ListObjectsV2(request);
 
 			// List all objects with the prefix recursively (no delimiter to get all nested objects)
-			do {
-				var request = new ListObjectsV2Request {
-					BucketName = bucketName,
-					Prefix = keyPrefix,
-					ContinuationToken = continuationToken
-				};
-
-				var response = await _s3Client.ListObjectsV2Async(request);
-
+			await foreach (var response in paginator.Responses) {
 				// Add all object keys to our deletion list
 				if (response.S3Objects != null) {
 					foreach (var obj in response.S3Objects) {
 						objectsToDelete.Add(obj.Key);
 					}
 				}
-
-				continuationToken = response.NextContinuationToken;
-			} while (continuationToken != null);
+			}
 
 			// If no objects to delete, return early
 			if (!objectsToDelete.Any()) {
@@ -321,13 +343,18 @@ namespace EJRASync.UI.Services {
 			const int batchSize = 1000;
 			for (int i = 0; i < objectsToDelete.Count; i += batchSize) {
 				var batch = objectsToDelete.Skip(i).Take(batchSize).ToList();
-				
+
 				var deleteRequest = new DeleteObjectsRequest {
 					BucketName = bucketName,
 					Objects = batch.Select(key => new KeyVersion { Key = key }).ToList()
 				};
 
 				await _s3Client.DeleteObjectsAsync(deleteRequest);
+
+				// Remove from hash store
+				foreach (var key in batch) {
+					_hashStoreService.RemoveHash(bucketName, key);
+				}
 			}
 		}
 
@@ -338,7 +365,7 @@ namespace EJRASync.UI.Services {
 			};
 
 			using var response = await _s3Client.GetObjectAsync(request);
-			
+
 			if (fileStream != null) {
 				using var responseStream = response.ResponseStream;
 				await CopyStreamWithProgressAsync(responseStream, fileStream, response.ContentLength, progress);
@@ -407,7 +434,7 @@ namespace EJRASync.UI.Services {
 			lock (_retryLock) {
 				// Dispose the old client
 				_s3Client?.Dispose();
-				
+
 				// Create new client with updated credentials
 				var config = new AmazonS3Config {
 					ServiceURL = serviceUrl,

@@ -1,5 +1,6 @@
 ﻿using Amazon.S3;
 using EJRASync.Lib;
+using EJRASync.Lib.Services;
 using EJRASync.UI.Services;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -35,7 +36,7 @@ namespace EJRASync.UI {
 			// Fetch AWS credentials before configuring services
 			var authApi = new EjraAuthApiService();
 			var tokens = await authApi.GetTokensAsync();
-			
+
 			string awsAccessKeyId = "";
 			string awsSecretAccessKey = "";
 			string serviceUrl = Constants.R2Url;
@@ -57,14 +58,21 @@ namespace EJRASync.UI {
 						return new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, config);
 					});
 
-					// Register auth services
+					// Register auth services from Lib
+					services.AddSingleton<IEjraAuthApiService, EjraAuthApiService>();
+					services.AddSingleton<IEjraAuthService, EjraAuthService>();
+					// UI aliases for backwards compatibility
 					services.AddSingleton<IEjraAuthApiService, EjraAuthApiService>();
 					services.AddSingleton<IEjraAuthService, EjraAuthService>();
 
-					// Register services
+					// Register services from Lib with circular dependency resolution
+					services.AddSingleton<IProgressService, SpectreProgressService>();
 					services.AddSingleton<IS3Service, S3Service>();
+					services.AddSingleton<Func<IS3Service>>(provider => () => provider.GetRequiredService<IS3Service>());
+					services.AddSingleton<IHashStoreService, HashStoreService>();
 					services.AddSingleton<IFileService, FileService>();
 					services.AddSingleton<ICompressionService, CompressionService>();
+					services.AddSingleton<IDownloadService, DownloadService>();
 					services.AddSingleton<IContentStatusService, ContentStatusService>();
 
 					// Register ViewModels
@@ -84,6 +92,9 @@ namespace EJRASync.UI {
 		}
 
 		protected override async void OnExit(ExitEventArgs e) {
+			// Clean up temporary files
+			MainWindowViewModel.CleanupTempFiles();
+
 			if (_host != null) {
 				await _host.StopAsync();
 				_host.Dispose();

@@ -3,7 +3,8 @@ namespace EJRASync.UI.Models {
 		CompressAndUpload,
 		RawUpload,
 		DeleteRemote,
-		UpdateYaml
+		UpdateYaml,
+		UpdateHashStore
 	}
 
 	public class PendingChange {

@@ -1,5 +1,6 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EJRASync.Lib.Services;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
@@ -9,8 +10,14 @@ using System.IO;
 namespace EJRASync.UI.ViewModels {
 	public partial class RemoteFileListViewModel : ObservableObject {
 		private readonly IS3Service _s3Service;
+		private readonly IHashStoreService _hashStoreService;
 		private readonly IContentStatusService _contentStatusService;
 		private readonly MainWindowViewModel _mainViewModel;
+
+		private const string BucketString = "Bucket";
+		private const string ParentDirectoryName = "..";
+		private const string FolderDisplaySize = "Folder";
+		private const string BucketListDisplaySize = "Bucket List";
 
 		[ObservableProperty]
 		private ObservableCollection<RemoteFileItem> _files = new();
@@ -29,9 +36,11 @@ namespace EJRASync.UI.ViewModels {
 
 		public RemoteFileListViewModel(
 			IS3Service s3Service,
+			IHashStoreService hashStoreService,
 			IContentStatusService contentStatusService,
 			MainWindowViewModel mainViewModel) {
 			_s3Service = s3Service;
+			_hashStoreService = hashStoreService;
 			_contentStatusService = contentStatusService;
 			_mainViewModel = mainViewModel;
 
@@ -54,7 +63,7 @@ namespace EJRASync.UI.ViewModels {
 						Files.Add(new RemoteFileItem {
 							Name = bucket,
 							Key = bucket,
-							DisplaySize = "Bucket",
+							DisplaySize = BucketString,
 							IsDirectory = true,
 							LastModified = DateTime.MinValue
 						});
@@ -62,7 +71,7 @@ namespace EJRASync.UI.ViewModels {
 
 					_mainViewModel.NavigationContext.SelectedBucket = null;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = "";
-					
+
 					// Update pending changes preview for bucket list
 					UpdatePendingChangesPreview(_mainViewModel.PendingChanges);
 				});
@@ -80,6 +89,10 @@ namespace EJRASync.UI.ViewModels {
 			});
 
 			try {
+				// Initialize hash store for this bucket
+				await _hashStoreService.InitializeBucketAsync(bucketName);
+
+				prefix = PathUtils.NormalizePath(prefix);
 				var files = await _s3Service.ListObjectsAsync(bucketName, prefix);
 
 				await this.InvokeUIAsync(() => {
@@ -90,27 +103,31 @@ namespace EJRASync.UI.ViewModels {
 						// Navigate back within bucket
 						var parentPrefix = GetParentPrefix(prefix);
 						Files.Add(new RemoteFileItem {
-							Name = "..",
-							Key = "..",
-							DisplaySize = "Folder",
+							Name = ParentDirectoryName,
+							Key = ParentDirectoryName,
+							DisplaySize = FolderDisplaySize,
 							IsDirectory = true,
 							LastModified = DateTime.MinValue
 						});
 					} else if (!string.IsNullOrEmpty(bucketName)) {
 						// Navigate back to bucket list
 						Files.Add(new RemoteFileItem {
-							Name = "..",
-							Key = "..",
-							DisplaySize = "Bucket List",
+							Name = ParentDirectoryName,
+							Key = ParentDirectoryName,
+							DisplaySize = BucketListDisplaySize,
 							IsDirectory = true,
 							LastModified = DateTime.MinValue
 						});
 					}
 
 					// Add files and populate activity status
-					foreach (var file in files) {
-						// Only apply coloring to root-level directories in ejra-cars and ejra-tracks buckets
-						if (file.IsDirectory && (bucketName == EJRASync.Lib.Constants.CarsBucketName || bucketName == EJRASync.Lib.Constants.TracksBucketName) && string.IsNullOrEmpty(prefix)) {
+					foreach (var libFile in files) {
+						var file = RemoteFileItem.FromLib(libFile);
+						// Only apply coloring to root-level directories in ejra-cars and ejra-tracks buckets, excluding .zstd
+						if (file.IsDirectory &&
+								(bucketName == EJRASync.Lib.Constants.CarsBucketName
+									|| bucketName == EJRASync.Lib.Constants.TracksBucketName)
+								&& string.IsNullOrEmpty(prefix) && file.Name != HashStoreService.HASH_STORE_DIR) {
 							file.IsActive = _contentStatusService.IsContentActive(bucketName, file.Name);
 						}
 
@@ -119,7 +136,7 @@ namespace EJRASync.UI.ViewModels {
 
 					_mainViewModel.NavigationContext.SelectedBucket = bucketName;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = prefix;
-					
+
 					// Update pending changes preview for new directory
 					UpdatePendingChangesPreview(_mainViewModel.PendingChanges);
 				});
@@ -137,13 +154,18 @@ namespace EJRASync.UI.ViewModels {
 			if (file == null || !file.IsDirectory)
 				return;
 
+			// Prevent navigation into .zstd directory (but allow viewing it)
+			// if (file.Key == HashStoreService.HASH_STORE_DIR) {
+			// 	return;
+			// }
+
 			_ = Task.Run(async () => {
 				try {
 					await this.InvokeUIAsync(() => {
 						_mainViewModel.StatusMessage = "Loading...";
 					});
 
-					if (file.Key == "..") {
+					if (file.Key == ParentDirectoryName) {
 						// Handle back navigation
 						if (string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket)) {
 							// Already at root
@@ -156,14 +178,14 @@ namespace EJRASync.UI.ViewModels {
 							var parentPrefix = GetParentPrefix(_mainViewModel.NavigationContext.RemoteCurrentPath);
 							await LoadFilesAsync(_mainViewModel.NavigationContext.SelectedBucket, parentPrefix);
 						}
-					} else if (_mainViewModel.NavigationContext.AvailableBuckets.Contains(file.Key)) {
-						// Navigate into bucket
-						await LoadFilesAsync(file.Key);
+					} else if (_mainViewModel.NavigationContext.AvailableBuckets.Contains(file.Name)) {
+						// Navigate into bucket (file.Name is the bucket name when at root level)
+						await LoadFilesAsync(file.Name);
 					} else {
 						// Navigate into directory within bucket
 						var newPrefix = string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)
 							? file.Key
-							: $"{_mainViewModel.NavigationContext.RemoteCurrentPath}/{file.Key}";
+							: $"{_mainViewModel.NavigationContext.RemoteCurrentPath}/{file.Name}/";
 
 						await LoadFilesAsync(_mainViewModel.NavigationContext.SelectedBucket!, newPrefix);
 					}
@@ -181,8 +203,12 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private async Task TagAsActiveAsync(RemoteFileItem? file) {
-			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.Where(f => f.IsDirectory).ToList() : (file != null && file.IsDirectory ? new List<RemoteFileItem> { file } : new List<RemoteFileItem>());
-			
+			var filesToProcess = SelectedFiles.Count > 0
+				? SelectedFiles.Where(f => f.IsDirectory && !f.Key.StartsWith(HashStoreService.HASH_STORE_DIR)).ToList()
+				: (file != null && file.IsDirectory && !file.Key.StartsWith(HashStoreService.HASH_STORE_DIR)
+					? new List<RemoteFileItem> { file }
+					: new List<RemoteFileItem>());
+
 			if (!filesToProcess.Any() || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
 				return;
 
@@ -220,7 +246,7 @@ namespace EJRASync.UI.ViewModels {
 				return "";
 
 			var lastSlash = cleanPrefix.LastIndexOf('/');
-			return lastSlash > 0 ? cleanPrefix.Substring(0, lastSlash) : "";
+			return lastSlash > 0 ? cleanPrefix.Substring(0, lastSlash + 1) : "";
 		}
 
 		private void OnContentStatusChanged(object? sender, ContentStatusChangedEventArgs e) {
@@ -260,8 +286,8 @@ namespace EJRASync.UI.ViewModels {
 					}
 
 					// Find pending changes that affect current directory
-					var relevantChanges = pendingChanges.Where(change => 
-						change.BucketName == currentBucket && 
+					var relevantChanges = pendingChanges.Where(change =>
+						change.BucketName == currentBucket &&
 						IsChangeRelevantToCurrentDirectory(change, currentPath)).ToList();
 
 					// Group changes by the name they will show in current directory to avoid duplicates
@@ -280,12 +306,12 @@ namespace EJRASync.UI.ViewModels {
 							// Determine if this should be a directory or file based on the change
 							var changeKey = firstChange.RemoteKey.Replace('\\', '/');
 							var isDirectory = string.IsNullOrEmpty(currentPath) && changeKey.Contains('/');
-							
+
 							// Add new file/folder preview for uploads - these get "To be added" status
 							var newFile = new RemoteFileItem {
 								Name = fileName,
 								Key = fileName,
-								DisplaySize = isDirectory ? "Folder" : (firstChange.FileSizeBytes?.ToString() ?? "Unknown"),
+								DisplaySize = isDirectory ? FolderDisplaySize : (firstChange.FileSizeBytes?.ToString() ?? "Unknown"),
 								LastModified = DateTime.Now,
 								IsDirectory = isDirectory,
 								IsPendingChange = true,
@@ -301,13 +327,13 @@ namespace EJRASync.UI.ViewModels {
 
 		private bool IsChangeRelevantToCurrentDirectory(PendingChange change, string currentPath) {
 			var changeKey = change.RemoteKey.Replace('\\', '/');
-			
+
 			// If we're at the bucket root (empty currentPath)
 			if (string.IsNullOrEmpty(currentPath)) {
 				// Always show changes - either files at root or the top-level folders of nested files
 				return true;
 			}
-			
+
 			// For subdirectories, check if the change is directly in the current path
 			var changeDirectory = Path.GetDirectoryName(changeKey)?.Replace('\\', '/') ?? "";
 			return changeDirectory == currentPath;
@@ -315,7 +341,7 @@ namespace EJRASync.UI.ViewModels {
 
 		private string GetFileNameFromChange(PendingChange change, string currentPath) {
 			var changeKey = change.RemoteKey.Replace('\\', '/');
-			
+
 			if (string.IsNullOrEmpty(currentPath)) {
 				// At bucket root - if the key has a path, return the first folder name
 				if (changeKey.Contains('/')) {
@@ -323,7 +349,7 @@ namespace EJRASync.UI.ViewModels {
 				}
 				return changeKey;
 			}
-			
+
 			// In subdirectory - return just the filename
 			return Path.GetFileName(changeKey);
 		}
@@ -352,13 +378,17 @@ namespace EJRASync.UI.ViewModels {
 
 		[RelayCommand]
 		private void DeleteRemoteFile(RemoteFileItem? file) {
-			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.Where(f => f.Name != "..").ToList() : (file != null && file.Name != ".." ? new List<RemoteFileItem> { file } : new List<RemoteFileItem>());
-			
+			var filesToProcess = SelectedFiles.Count > 0
+				? SelectedFiles.Where(f => f.Name != ParentDirectoryName && !f.Key.StartsWith(HashStoreService.HASH_STORE_DIR)).ToList()
+				: (file != null && file.Name != ParentDirectoryName && !file.Key.StartsWith(HashStoreService.HASH_STORE_DIR)
+					? new List<RemoteFileItem> { file }
+					: new List<RemoteFileItem>());
+
 			if (!filesToProcess.Any() || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
 				return;
 
 			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
-			
+
 			foreach (var item in filesToProcess) {
 				var remoteKey = string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)
 					? item.Key
@@ -373,6 +403,34 @@ namespace EJRASync.UI.ViewModels {
 
 				_mainViewModel.AddPendingChange(change);
 			}
+		}
+
+		[RelayCommand]
+		private async Task DownloadRemoteFile(RemoteFileItem? file) {
+			if (file == null || file.IsDirectory || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
+				return;
+
+			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
+
+			// The file.Key already contains the full S3 path, so we don't need to prepend the current path
+			var remoteKey = file.Key;
+
+			// Let the main window handle the actual download with file dialog
+			await _mainViewModel.HandleRemoteFileDownload(bucketName, remoteKey, file.Name);
+		}
+
+		[RelayCommand]
+		private async Task ViewRemoteFile(RemoteFileItem? file) {
+			if (file == null || file.IsDirectory || string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket))
+				return;
+
+			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
+
+			// The file.Key already contains the full S3 path, so we don't need to prepend the current path
+			var remoteKey = file.Key;
+
+			// Let the main window handle the download and view
+			await _mainViewModel.HandleRemoteFileView(bucketName, remoteKey, file.Name);
 		}
 
 	}

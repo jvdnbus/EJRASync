@@ -13,17 +13,17 @@ namespace EJRASync.UI.Views {
 
 		public UploadConfirmationDialog(int fileCount = 1) {
 			InitializeComponent();
-			
+
 			// Set appropriate message based on file count
 			if (fileCount == 1) {
 				MessageTextBlock.Text = "Would you like to compress this file before uploading?";
 			} else {
 				MessageTextBlock.Text = $"Would you like to compress these {fileCount} files before uploading?";
 			}
-			
+
 			// Set up keyboard shortcuts
 			KeyDown += OnKeyDown;
-			
+
 			// Focus the default button
 			Loaded += (s, e) => YesButton.Focus();
 		}

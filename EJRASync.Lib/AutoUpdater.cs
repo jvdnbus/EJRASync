@@ -29,12 +29,16 @@ namespace EJRASync.Lib {
 			}
 		}
 
-		private async Task<GitHubRelease> UpdateAvailable(string currentVersion) {
+		private async Task<GitHubRelease?> UpdateAvailable(string currentVersion) {
 			// Get the JSON from the GitHub API
 			// Parse the JSON
 			// Compare the version number
 
 			var release = await this.LatestRelease();
+
+			if (release == null) {
+				return null;
+			}
 
 			foreach (var asset in release.Assets) {
 				if (asset.Name.EndsWith(".exe")) {

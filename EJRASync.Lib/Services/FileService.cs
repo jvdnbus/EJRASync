@@ -1,11 +1,10 @@
-using EJRASync.UI.Models;
-using System.IO;
+using EJRASync.Lib.Models;
 using System.Security.Cryptography;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public class FileService : IFileService {
-		public async Task<List<LocalFileItem>> GetLocalFilesAsync(string directoryPath, bool recursive = false) {
-			var items = new List<LocalFileItem>();
+		public async Task<List<LocalFile>> GetLocalFilesAsync(string directoryPath, bool recursive = false) {
+			var items = new List<LocalFile>();
 
 			if (!Directory.Exists(directoryPath))
 				return items;
@@ -16,12 +15,12 @@ namespace EJRASync.UI.Services {
 						// Use EnumerateFileSystemEntries for recursive enumeration
 						var searchOption = SearchOption.AllDirectories;
 						var entries = Directory.EnumerateFileSystemEntries(directoryPath, "*", searchOption);
-						
+
 						foreach (var entry in entries) {
 							try {
 								if (Directory.Exists(entry)) {
 									var dirInfo = new DirectoryInfo(entry);
-									items.Add(new LocalFileItem {
+									items.Add(new LocalFile {
 										Name = GetRelativePath(directoryPath, entry),
 										FullPath = entry,
 										DisplaySize = "Folder",
@@ -30,7 +29,7 @@ namespace EJRASync.UI.Services {
 									});
 								} else if (File.Exists(entry)) {
 									var fileInfo = new FileInfo(entry);
-									items.Add(new LocalFileItem {
+									items.Add(new LocalFile {
 										Name = GetRelativePath(directoryPath, entry),
 										FullPath = entry,
 										DisplaySize = FormatFileSize(fileInfo.Length),
@@ -52,7 +51,7 @@ namespace EJRASync.UI.Services {
 						foreach (var dir in directories) {
 							try {
 								var dirInfo = new DirectoryInfo(dir);
-								items.Add(new LocalFileItem {
+								items.Add(new LocalFile {
 									Name = dirInfo.Name,
 									FullPath = dir,
 									DisplaySize = "Folder",
@@ -71,7 +70,7 @@ namespace EJRASync.UI.Services {
 						foreach (var file in files) {
 							try {
 								var fileInfo = new FileInfo(file);
-								items.Add(new LocalFileItem {
+								items.Add(new LocalFile {
 									Name = fileInfo.Name,
 									FullPath = file,
 									DisplaySize = FormatFileSize(fileInfo.Length),
@@ -134,11 +133,11 @@ namespace EJRASync.UI.Services {
 			return parent?.FullName ?? path;
 		}
 
-		public async Task<LocalFileItem?> GetFileInfoAsync(string filePath) {
+		public async Task<LocalFile?> GetFileInfoAsync(string filePath) {
 			try {
 				if (Directory.Exists(filePath)) {
 					var dirInfo = new DirectoryInfo(filePath);
-					return new LocalFileItem {
+					return new LocalFile {
 						Name = dirInfo.Name,
 						FullPath = filePath,
 						DisplaySize = "Folder",
@@ -149,7 +148,7 @@ namespace EJRASync.UI.Services {
 					var fileInfo = new FileInfo(filePath);
 					var hash = await CalculateFileHashAsync(filePath);
 
-					return new LocalFileItem {
+					return new LocalFile {
 						Name = fileInfo.Name,
 						FullPath = filePath,
 						DisplaySize = FormatFileSize(fileInfo.Length),

@@ -1,7 +1,6 @@
-using System.Linq;
 using System.Text.Json.Serialization;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public enum AuthProvider {
 		Discord = 0,
 		Twitch = 1,
@@ -33,7 +32,7 @@ namespace EJRASync.UI.Services {
 		public string? GetProfileImageUrl() {
 			return UserProfile?.Properties.Provider switch {
 				AuthProvider.Twitch => UserProfile.Properties.Data.Data?.FirstOrDefault()?.ProfileImageUrl,
-				AuthProvider.Discord => UserProfile.Properties.Data.User?.Avatar != null 
+				AuthProvider.Discord => UserProfile.Properties.Data.User?.Avatar != null
 					? $"https://cdn.discordapp.com/avatars/{UserProfile.Properties.Data.User.Id}/{UserProfile.Properties.Data.User.Avatar}.png"
 					: null,
 				_ => null
@@ -51,7 +50,7 @@ namespace EJRASync.UI.Services {
 
 		public bool IsExpired() {
 			if (UserProfile?.Exp == null) return true;
-			
+
 			var expirationTime = DateTimeOffset.FromUnixTimeSeconds(UserProfile.Exp);
 			return DateTimeOffset.UtcNow >= expirationTime;
 		}
@@ -78,7 +77,7 @@ namespace EJRASync.UI.Services {
 	public class UserProviderData {
 		// Twitch provider data (AuthProvider.Twitch)
 		public List<TwitchUserProfile>? Data { get; set; }
-		
+
 		// Discord provider data (AuthProvider.Discord)
 		public DiscordApplication? Application { get; set; }
 		public string? Expires { get; set; }

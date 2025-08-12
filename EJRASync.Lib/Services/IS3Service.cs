@@ -1,11 +1,11 @@
-using EJRASync.UI.Models;
-using System.IO;
+using EJRASync.Lib.Models;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public interface IS3Service : IDisposable {
-		Task<List<RemoteFileItem>> ListObjectsAsync(string bucketName, string prefix = "", string delimiter = "/", CancellationToken cancellationToken = default);
+		Task<List<RemoteFile>> ListObjectsAsync(string bucketName, string prefix = "", string delimiter = "/", CancellationToken cancellationToken = default);
 		Task<List<string>> ListBucketsAsync();
-		Task<RemoteFileItem?> GetObjectMetadataAsync(string bucketName, string key);
+		Task<RemoteFile?> GetObjectMetadataAsync(string bucketName, string key);
+		Task<string?> GetObjectOriginalHashFromMetadataAsync(string bucketName, string key);
 		Task UploadFileAsync(string bucketName, string key, string localFilePath, Dictionary<string, string>? metadata = null, IProgress<long>? progress = null);
 		Task UploadDataAsync(string bucketName, string key, byte[] data, Dictionary<string, string>? metadata = null);
 		Task DeleteObjectAsync(string bucketName, string key);

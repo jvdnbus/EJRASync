@@ -11,7 +11,7 @@ namespace EJRASync.UI.Views {
 
 			InitializeComponent();
 			DataContext = this;
-			
+
 			// Set the window title after InitializeComponent
 			Title = $"Pending Changes ({pendingChanges.Count} items)";
 		}

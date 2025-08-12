@@ -5,13 +5,13 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace EJRASync.UI.Services {
 	public class ContentStatusService : IContentStatusService {
-		private readonly IS3Service _s3Service;
+		private readonly EJRASync.Lib.Services.IS3Service _s3Service;
 		private readonly Dictionary<string, HashSet<string>> _activeContent;
 		private readonly Dictionary<string, string> _bucketYamlFiles;
 
 		public event EventHandler<ContentStatusChangedEventArgs>? ContentStatusChanged;
 
-		public ContentStatusService(IS3Service s3Service) {
+		public ContentStatusService(EJRASync.Lib.Services.IS3Service s3Service) {
 			_s3Service = s3Service;
 			_activeContent = new Dictionary<string, HashSet<string>>();
 			_bucketYamlFiles = new Dictionary<string, string>
@@ -35,7 +35,7 @@ namespace EJRASync.UI.Services {
 			try {
 				var tempFilePath = await _s3Service.DownloadObjectAsync(bucketName, yamlFileName, null, null);
 				var yamlContent = await File.ReadAllTextAsync(tempFilePath);
-				
+
 				// Clean up temp file
 				if (File.Exists(tempFilePath)) {
 					File.Delete(tempFilePath);

@@ -1,9 +1,7 @@
-using EJRASync.Lib;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public class EjraAuthApiService : IEjraAuthApiService {
 		private readonly HttpClient _httpClient;
 
@@ -17,7 +15,7 @@ namespace EJRASync.UI.Services {
 		public async Task<AuthTokenResponse?> GetTokensAsync(OAuthToken? oauthToken = null) {
 			try {
 				HttpResponseMessage response;
-				
+
 				if (string.IsNullOrEmpty(oauthToken?.UserProfile?.Properties.AccessToken)) {
 					response = await _httpClient.GetAsync($"{Constants.EjraAuthApi}/r2/token");
 				} else {
@@ -25,7 +23,7 @@ namespace EJRASync.UI.Services {
 					request.Headers.Add("x-api-token", oauthToken?.UserProfile?.Properties.AccessToken);
 					response = await _httpClient.SendAsync(request);
 				}
-				
+
 				response.EnsureSuccessStatusCode();
 
 				var content = await response.Content.ReadAsStringAsync();
@@ -58,6 +56,10 @@ namespace EJRASync.UI.Services {
 				SentrySdk.CaptureException(ex);
 				return null;
 			}
+		}
+
+		public void Dispose() {
+			_httpClient?.Dispose();
 		}
 	}
 
@@ -100,7 +102,7 @@ namespace EJRASync.UI.Services {
 		public string AccessKeyId { get; set; } = null!;
 
 		[JsonPropertyName("secret_access_key")]
-		public string SecretAccessKey { get; set; } = null!;
+		public string SecretAccessKey { get; set; } = string.Empty;
 
 		public AwsCredentials ToAwsCredentials() => new() {
 			AccessKeyId = AccessKeyId,

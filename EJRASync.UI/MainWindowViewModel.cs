@@ -1,5 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EJRASync.Lib.Services;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
@@ -11,6 +12,7 @@ using System.Windows;
 namespace EJRASync.UI {
 	public partial class MainWindowViewModel : ObservableObject {
 		private readonly IS3Service _s3Service;
+		private readonly IHashStoreService _hashStoreService;
 		private readonly IFileService _fileService;
 		private readonly IContentStatusService _contentStatusService;
 		private readonly ICompressionService _compressionService;
@@ -57,7 +59,7 @@ namespace EJRASync.UI {
 		private string? _userProviderName;
 
 		private OAuthToken? _currentOAuthToken;
-		private EJRASync.UI.Views.PendingChangesDialog? _pendingChangesDialog;
+		private Views.PendingChangesDialog? _pendingChangesDialog;
 		private CancellationTokenSource? _operationCancellationTokenSource;
 
 		public LocalFileListViewModel LocalFiles { get; }
@@ -65,12 +67,14 @@ namespace EJRASync.UI {
 
 		public MainWindowViewModel(
 			IS3Service s3Service,
+			IHashStoreService hashStoreService,
 			IFileService fileService,
 			IContentStatusService contentStatusService,
 			ICompressionService compressionService,
 			IEjraAuthApiService authApi,
 			IEjraAuthService authService) {
 			_s3Service = s3Service;
+			_hashStoreService = hashStoreService;
 			_fileService = fileService;
 			_contentStatusService = contentStatusService;
 			_compressionService = compressionService;
@@ -78,7 +82,14 @@ namespace EJRASync.UI {
 			_authService = authService;
 
 			LocalFiles = new LocalFileListViewModel(_fileService, this);
-			RemoteFiles = new RemoteFileListViewModel(_s3Service, _contentStatusService, this);
+			RemoteFiles = new RemoteFileListViewModel(_s3Service, _hashStoreService, _contentStatusService, this);
+
+			// Subscribe to NavigationContext changes for command updates
+			NavigationContext.PropertyChanged += (s, e) => {
+				if (e.PropertyName == nameof(NavigationContext.SelectedBucket)) {
+					RebuildHashStoreCommand.NotifyCanExecuteChanged();
+				}
+			};
 
 			// Set up default Assetto Corsa path
 			var steamPath = EJRASync.Lib.SteamHelper.FindSteam();
@@ -90,7 +101,7 @@ namespace EJRASync.UI {
 		public async Task InitializeAsync() {
 			await _contentStatusService.InitializeAsync();
 			await LocalFiles.LoadFilesAsync(NavigationContext.LocalCurrentPath);
-			
+
 			// Try auto-login with saved token
 			await TryAutoLoginAsync();
 		}
@@ -106,8 +117,7 @@ namespace EJRASync.UI {
 					// No valid saved token, check for basic read access
 					await CheckWriteAccessAsync();
 				}
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				// If auto-login fails, just check for basic access
 				await CheckWriteAccessAsync();
 			}
@@ -117,8 +127,7 @@ namespace EJRASync.UI {
 			try {
 				var tokens = await _authApi.GetTokensAsync();
 				HasWriteAccess = tokens?.UserWrite != null;
-			}
-			catch {
+			} catch {
 				HasWriteAccess = false;
 			}
 		}
@@ -139,7 +148,7 @@ namespace EJRASync.UI {
 				ViewChangesCommand.NotifyCanExecuteChanged();
 				DiscardChangesCommand.NotifyCanExecuteChanged();
 				ApplyChangesCommand.NotifyCanExecuteChanged();
-				
+
 				// Update dialog title if it's open
 				UpdatePendingChangesDialogTitle();
 
@@ -148,7 +157,7 @@ namespace EJRASync.UI {
 
 				for (int i = 0; i < buckets.Length; i++) {
 					_operationCancellationTokenSource.Token.ThrowIfCancellationRequested();
-					
+
 					var bucket = buckets[i];
 					var localFolder = localFolders[i];
 					var localPath = Path.Combine(NavigationContext.LocalBasePath, localFolder);
@@ -164,13 +173,13 @@ namespace EJRASync.UI {
 
 				if (!IsCancelling) {
 					StatusMessage = $"Found {PendingChanges.Count} changes";
-					
+
 					// Update UI after scanning is complete
 					OnPropertyChanged(nameof(ViewChangesButtonText));
 					ViewChangesCommand.NotifyCanExecuteChanged();
 					DiscardChangesCommand.NotifyCanExecuteChanged();
 					ApplyChangesCommand.NotifyCanExecuteChanged();
-					
+
 					// Update remote file list preview
 					RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
 				}
@@ -199,39 +208,46 @@ namespace EJRASync.UI {
 
 			try {
 				cancellationToken.ThrowIfCancellationRequested();
-				
+
 				// First, get the list of existing remote directories (top-level folders in the bucket)
 				var remoteItems = await _s3Service.ListObjectsAsync(bucketName, cancellationToken: cancellationToken);
-				var remoteDirs = remoteItems.Where(item => item.IsDirectory).Select(dir => dir.Name).ToList();
+				var remoteDirs = remoteItems
+					.Where(item => item.IsDirectory && !item.Key.StartsWith(HashStoreService.HASH_STORE_DIR))
+					.Select(dir => dir.Name)
+					.ToList();
 
 				// Collect all files from all remote directories and their corresponding local files
 				var allRemoteFiles = new List<RemoteFileItem>();
 				var allLocalFiles = new List<LocalFileItem>();
-				
+
 				foreach (var remoteDir in remoteDirs) {
 					cancellationToken.ThrowIfCancellationRequested();
-					
+
 					var localDirPath = Path.Combine(localPath, remoteDir);
-					
+
 					// Update status to show current directory being scanned
 					if (!IsCancelling) {
 						StatusMessage = $"Scanning {bucketName}/{remoteDir}...";
 					}
-					
+
 					// Only scan if the corresponding local directory exists
 					if (Directory.Exists(localDirPath)) {
 						// Get all files in this remote directory recursively (no delimiter to get nested files)
 						var remoteDirFiles = await _s3Service.ListObjectsAsync(bucketName, remoteDir, "", cancellationToken);
-						allRemoteFiles.AddRange(remoteDirFiles.Where(f => !f.IsDirectory));
-						
+						allRemoteFiles
+							.AddRange(remoteDirFiles.Where(f => !f.IsDirectory && !f.Key.StartsWith(HashStoreService.HASH_STORE_DIR))
+							.Select(RemoteFileItem.FromLib));
+
 						// Get all local files in this directory recursively
 						var localDirFiles = await _fileService.GetLocalFilesAsync(localDirPath, true);
-						allLocalFiles.AddRange(localDirFiles.Where(f => !f.IsDirectory));
+						allLocalFiles
+							.AddRange(localDirFiles.Where(f => !f.IsDirectory)
+							.Select(LocalFileItem.FromLib));
 					}
 				}
 
 				cancellationToken.ThrowIfCancellationRequested();
-				
+
 				// Update status for file comparison phase
 				if (!IsCancelling) {
 					StatusMessage = $"Comparing {allLocalFiles.Count} files in {bucketName}...";
@@ -252,9 +268,9 @@ namespace EJRASync.UI {
 			// Process each local file against the remote files
 			foreach (var localFile in localFiles) {
 				cancellationToken.ThrowIfCancellationRequested();
-				
+
 				var relativePath = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
-				
+
 				if (remoteFilesByKey.TryGetValue(relativePath, out var remoteFile)) {
 					// File exists - check if changed
 					var localHash = await _fileService.CalculateFileHashAsync(localFile.FullPath);
@@ -283,7 +299,7 @@ namespace EJRASync.UI {
 				BucketName = bucketName,
 				FileSizeBytes = localFile.SizeBytes
 			});
-			
+
 			// Update UI commands whenever changes are added
 			OnPropertyChanged(nameof(ViewChangesButtonText));
 			ViewChangesCommand.NotifyCanExecuteChanged();
@@ -303,12 +319,12 @@ namespace EJRASync.UI {
 			}
 
 			// Create new dialog instance
-			_pendingChangesDialog = new EJRASync.UI.Views.PendingChangesDialog(PendingChanges);
+			_pendingChangesDialog = new Views.PendingChangesDialog(PendingChanges);
 			_pendingChangesDialog.Owner = Application.Current.MainWindow;
-			
+
 			// Handle when dialog is closed to clear the reference
 			_pendingChangesDialog.Closed += (s, e) => _pendingChangesDialog = null;
-			
+
 			_pendingChangesDialog.Show();
 		}
 
@@ -321,13 +337,13 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
-			
+
 			// Update dialog title if it's open
 			UpdatePendingChangesDialogTitle();
-			
+
 			// Clear remote file list preview
 			RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
-			
+
 			StatusMessage = "Changes discarded";
 		}
 
@@ -369,18 +385,45 @@ namespace EJRASync.UI {
 					}
 				});
 
+				// Check for dirty hash stores and add UpdateHashStore pending changes
+				var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName,
+									  EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
+
+				foreach (var bucket in buckets) {
+					if (_hashStoreService.IsDirty(bucket)) {
+						PendingChanges.Add(new PendingChange {
+							Type = ChangeType.UpdateHashStore,
+							BucketName = bucket,
+							Description = $"Update hash store for {bucket}"
+						});
+					}
+				}
+
+				// If we added hash store updates, apply them immediately
+				if (PendingChanges.Any(c => c.Type == ChangeType.UpdateHashStore)) {
+					var hashStoreChanges = PendingChanges.Where(c => c.Type == ChangeType.UpdateHashStore).ToList();
+					foreach (var change in hashStoreChanges) {
+						try {
+							await ProcessUpdateHashStoreAsync(change);
+							PendingChanges.Remove(change);
+						} catch (Exception ex) {
+							Console.WriteLine($"Error updating hash store for {change.BucketName}: {ex.Message}");
+						}
+					}
+				}
+
 				PendingChanges.Clear();
 				OnPropertyChanged(nameof(ViewChangesButtonText));
 				ViewChangesCommand.NotifyCanExecuteChanged();
 				DiscardChangesCommand.NotifyCanExecuteChanged();
 				ApplyChangesCommand.NotifyCanExecuteChanged();
-				
+
 				// Update dialog title if it's open
 				UpdatePendingChangesDialogTitle();
-				
+
 				// Clear remote file list preview
 				RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
-				
+
 				// Refresh the current remote directory to show updated state
 				if (!IsCancelling && !string.IsNullOrEmpty(NavigationContext.SelectedBucket)) {
 					_ = Task.Run(async () => {
@@ -391,7 +434,7 @@ namespace EJRASync.UI {
 						}
 					});
 				}
-				
+
 				if (!IsCancelling) {
 					StatusMessage = $"Successfully applied {processedChanges} changes";
 				}
@@ -426,6 +469,9 @@ namespace EJRASync.UI {
 					break;
 				case ChangeType.DeleteRemote:
 					await ProcessDeleteRemoteAsync(change, cancellationToken);
+					break;
+				case ChangeType.UpdateHashStore:
+					await ProcessUpdateHashStoreAsync(change, cancellationToken);
 					break;
 			}
 		}
@@ -470,7 +516,7 @@ namespace EJRASync.UI {
 
 		private async Task ProcessDeleteRemoteAsync(PendingChange change, CancellationToken cancellationToken = default) {
 			cancellationToken.ThrowIfCancellationRequested();
-			
+
 			// Check if we're deleting a folder (ends with / or is a directory prefix)
 			// For folders, we need to use recursive deletion to remove all objects under that prefix
 			if (change.RemoteKey.EndsWith("/")) {
@@ -479,12 +525,16 @@ namespace EJRASync.UI {
 			} else {
 				// Check if this key represents a directory by looking for objects with this prefix
 				var objectsWithPrefix = await _s3Service.ListObjectsAsync(change.BucketName, change.RemoteKey + "/");
-				
+				// Filter out .zstd files from the check
+				objectsWithPrefix = objectsWithPrefix
+					.Where(obj => !obj.Key.StartsWith(HashStoreService.HASH_STORE_DIR))
+					.ToList();
+
 				if (objectsWithPrefix.Any()) {
 					// It's a folder that doesn't end with / but has child objects - use recursive deletion
 					await _s3Service.DeleteObjectsRecursiveAsync(change.BucketName, change.RemoteKey + "/");
 				}
-				
+
 				// Also delete the individual object (could be both a file and a prefix)
 				await _s3Service.DeleteObjectAsync(change.BucketName, change.RemoteKey);
 			}
@@ -514,12 +564,12 @@ namespace EJRASync.UI {
 					return;
 				}
 
-				var dialog = new EJRASync.UI.Views.OAuthDialog(_authService);
-				
+				var dialog = new Views.OAuthDialog(_authService);
+
 				// Show dialog and start authentication
-				var dialogTask = dialog.StartAuthenticationAsync();				
+				var dialogTask = dialog.StartAuthenticationAsync();
 				var result = dialog.ShowDialog();
-				
+
 				if (result == true && dialog.OAuthToken != null) {
 					// Save the new token for future auto-login
 					await _authService.SaveTokenAsync(dialog.OAuthToken);
@@ -537,22 +587,22 @@ namespace EJRASync.UI {
 			try {
 				// Get write R2 tokens using the OAuth token (this can be done on background thread)
 				var tokens = await _authApi.GetTokensAsync(token);
-				
+
 				// Update UI properties
 				await Application.Current.Dispatcher.InvokeAsync(() => {
 					StatusMessage = initialStatusMessage;
-					
+
 					// Store the OAuth token and update user info
 					_currentOAuthToken = token;
 					UserDisplayName = token.GetDisplayName();
 					UserProfileImageUrl = token.GetProfileImageUrl();
 					UserProviderName = token.GetProviderName();
 					IsLoggedIn = true;
-					
+
 					if (tokens?.UserWrite != null) {
 						HasWriteAccess = true;
 						StatusMessage = "Login successful! (Admin)";
-						
+
 						// Update S3Service with write credentials
 						_s3Service.UpdateCredentials(
 							tokens.UserWrite.Aws.AccessKeyId,
@@ -563,8 +613,7 @@ namespace EJRASync.UI {
 						StatusMessage = "Login successful!";
 					}
 				});
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				await Application.Current.Dispatcher.InvokeAsync(() => {
 					StatusMessage = $"Auto-login failed: {ex.Message}";
 				});
@@ -572,11 +621,17 @@ namespace EJRASync.UI {
 			}
 		}
 
-		[RelayCommand]
+		private async Task ProcessUpdateHashStoreAsync(PendingChange change, CancellationToken cancellationToken = default) {
+			cancellationToken.ThrowIfCancellationRequested();
+
+			// Save the hash store for this bucket
+			await _hashStoreService.SaveToRemoteAsync(change.BucketName);
+		}
+
 		private async void Logout() {
 			// Clear the saved token
 			await _authService.ClearSavedTokenAsync();
-			
+
 			_currentOAuthToken = null;
 			UserDisplayName = null;
 			UserProfileImageUrl = null;
@@ -584,7 +639,7 @@ namespace EJRASync.UI {
 			IsLoggedIn = false;
 			HasWriteAccess = false;
 			StatusMessage = "Logged out successfully.";
-			
+
 			// Revert S3Service to read-only credentials
 			try {
 				var tokens = await _authApi.GetTokensAsync();
@@ -608,10 +663,10 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
-			
+
 			// Update dialog title if it's open
 			UpdatePendingChangesDialogTitle();
-			
+
 			// Update remote file list preview - this will immediately update the current view
 			RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
 		}
@@ -624,11 +679,123 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+			RebuildHashStoreCommand.NotifyCanExecuteChanged();
+		}
+
+		partial void OnIsApplyingChanged(bool value) {
+			RebuildHashStoreCommand.NotifyCanExecuteChanged();
 		}
 
 		private void UpdatePendingChangesDialogTitle() {
 			if (_pendingChangesDialog != null) {
 				_pendingChangesDialog.Title = $"Pending Changes ({PendingChanges.Count} items)";
+			}
+		}
+
+		[RelayCommand(CanExecute = nameof(CanRebuildHashStore))]
+		private async Task RebuildHashStore() {
+			if (string.IsNullOrEmpty(NavigationContext.SelectedBucket)) {
+				StatusMessage = "No bucket selected for hash store rebuild";
+				return;
+			}
+
+			try {
+				IsApplying = true;
+				StatusMessage = $"Rebuilding hash store for {NavigationContext.SelectedBucket}...";
+
+				await _hashStoreService.RebuildHashStoreAsync(NavigationContext.SelectedBucket);
+
+				StatusMessage = $"Hash store rebuilt successfully for {NavigationContext.SelectedBucket}";
+
+				// Refresh the current view to show updated compression status
+				if (!string.IsNullOrEmpty(NavigationContext.SelectedBucket)) {
+					_ = Task.Run(async () => {
+						try {
+							await RemoteFiles.LoadFilesAsync(NavigationContext.SelectedBucket, NavigationContext.RemoteCurrentPath ?? "");
+						} catch (Exception ex) {
+							Console.WriteLine($"Error refreshing remote directory after hash store rebuild: {ex.Message}");
+						}
+					});
+				}
+			} catch (Exception ex) {
+				StatusMessage = $"Error rebuilding hash store: {ex.Message}";
+			} finally {
+				IsApplying = false;
+			}
+		}
+
+		private bool CanRebuildHashStore() {
+			return HasWriteAccess && !IsApplying && !string.IsNullOrEmpty(NavigationContext.SelectedBucket);
+		}
+
+		public async Task HandleRemoteFileDownload(string bucketName, string remoteKey, string fileName) {
+			try {
+				// Show save dialog
+				var saveFileDialog = new Microsoft.Win32.SaveFileDialog {
+					FileName = fileName,
+					Title = "Save file as..."
+				};
+
+				if (saveFileDialog.ShowDialog() == true) {
+					StatusMessage = $"Downloading {fileName}...";
+
+					// Download the file directly to the selected location
+					using (var fileStream = new FileStream(saveFileDialog.FileName, FileMode.Create, FileAccess.Write)) {
+						await _s3Service.DownloadObjectAsync(bucketName, remoteKey, fileStream);
+					}
+
+					StatusMessage = $"Downloaded {fileName} successfully";
+				}
+			} catch (Exception ex) {
+				StatusMessage = $"Error downloading {fileName}: {ex.Message}";
+			}
+		}
+
+		public async Task HandleRemoteFileView(string bucketName, string remoteKey, string fileName) {
+			try {
+				StatusMessage = $"Downloading {fileName} for viewing...";
+
+				// Download to temp file
+				var tempFilePath = await _s3Service.DownloadObjectAsync(bucketName, remoteKey);
+
+				// Track temp file for cleanup
+				AddTempFileForCleanup(tempFilePath);
+
+				StatusMessage = $"Opening {fileName}...";
+
+				// Open with default application
+				var processInfo = new System.Diagnostics.ProcessStartInfo {
+					FileName = tempFilePath,
+					UseShellExecute = true
+				};
+
+				System.Diagnostics.Process.Start(processInfo);
+				StatusMessage = "File opened successfully";
+			} catch (Exception ex) {
+				StatusMessage = $"Error opening {fileName}: {ex.Message}";
+			}
+		}
+
+		private static readonly List<string> _tempFilesForCleanup = new();
+
+		private void AddTempFileForCleanup(string filePath) {
+			lock (_tempFilesForCleanup) {
+				_tempFilesForCleanup.Add(filePath);
+			}
+		}
+
+		public static void CleanupTempFiles() {
+			lock (_tempFilesForCleanup) {
+				foreach (var tempFile in _tempFilesForCleanup) {
+					try {
+						if (File.Exists(tempFile)) {
+							File.Delete(tempFile);
+						}
+					} catch {
+						// Ignore cleanup errors
+					}
+				}
+				_tempFilesForCleanup.Clear();
 			}
 		}
 	}

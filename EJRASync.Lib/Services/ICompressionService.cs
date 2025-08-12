@@ -1,4 +1,4 @@
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public interface ICompressionService {
 		Task<string> CompressFileAsync(string inputFilePath, IProgress<int>? progress = null);
 		Task<string> CompressDataAsync(byte[] data, IProgress<int>? progress = null);

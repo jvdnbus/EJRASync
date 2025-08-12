@@ -1,15 +1,16 @@
 ﻿using Amazon.S3;
 using EJRASync.Lib;
-using System.Security.Principal;
+using EJRASync.Lib.Services;
 using Spectre.Console;
+using System.Runtime.InteropServices;
+using System.Security.Principal;
 
 class CLI {
-    static void Main(string[] args) {
-		var currentUser = WindowsIdentity.GetCurrent().Name;
+	static async Task Main(string[] args) {
+		var currentUser = GetCurrentUser();
 		Console.WriteLine($"Current user: {currentUser}");
 
-		SentrySdk.Init(options =>
-		{
+		SentrySdk.Init(options => {
 			options.Dsn = Constants.SentryDSN;
 			options.Debug = false;
 			options.AutoSessionTracking = true;
@@ -17,20 +18,51 @@ class CLI {
 			options.ProfilesSampleRate = 1.0;
 		});
 
-		SentrySdk.ConfigureScope(scope =>
-		{
+		SentrySdk.ConfigureScope(scope => {
 			scope.SetTag("username", currentUser);
-			//scope.SetTag("steam.accountname", "");
-			//scope.SetTag("steam.personaname", "");
 		});
 
-		var s3Client = new AmazonS3Client("", "", new AmazonS3Config {
-			ServiceURL = Constants.R2Url,
+		// Fetch AWS credentials before configuring S3 client
+		var authApi = new EjraAuthApiService();
+		var tokens = await authApi.GetTokensAsync();
+
+		string awsAccessKeyId = "";
+		string awsSecretAccessKey = "";
+		string serviceUrl = Constants.R2Url;
+
+		if (tokens?.UserRead != null) {
+			awsAccessKeyId = tokens.UserRead.Aws.AccessKeyId;
+			awsSecretAccessKey = tokens.UserRead.Aws.SecretAccessKey;
+			serviceUrl = tokens.UserRead.S3Url;
+			AnsiConsole.MarkupLine($"[green](✓)[/] Authenticated successfully");
+		} else {
+			AnsiConsole.MarkupLine($"[yellow]/!\\[/] Using anonymous access");
+		}
+
+		//AWSConfigs.LoggingConfig.LogResponses = ResponseLoggingOption.Always;
+		//AWSConfigs.LoggingConfig.LogMetrics = true;
+		//AWSConfigs.LoggingConfig.LogTo = LoggingOptions.Console;
+
+		var s3Config = new AmazonS3Config {
+			ServiceURL = serviceUrl,
 			ForcePathStyle = true,
-		});
+		};
+		var s3Client = new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, s3Config);
 
 		var autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.ExecutableName}");
 		autoUpdater.ProcessUpdates().Wait();
+
+		var progressService = new SpectreProgressService();
+		var fileService = new FileService();
+		var compressionService = new CompressionService();
+
+		// Use lazy initialization to break circular dependency
+		IS3Service? s3ServiceRef = null;
+		var hashStoreService = new HashStoreService(() => s3ServiceRef!, progressService);
+		var s3Service = new S3Service(s3Client, hashStoreService);
+		s3ServiceRef = s3Service;
+
+		var downloadService = new DownloadService(s3Service, fileService, compressionService);
 
 		SyncManager syncManager;
 
@@ -40,17 +72,24 @@ class CLI {
 			AnsiConsole.MarkupLine($"[bold]Override AssettoCorsa Path:[/] {acPath}");
 			SentrySdk.ConfigureScope(scope => scope.SetTag("ac.path", acPath));
 
-			syncManager = new SyncManager(s3Client, acPath);
+			syncManager = new SyncManager(downloadService, s3Service, hashStoreService, progressService, acPath);
 		} else {
-			syncManager = new SyncManager(s3Client);
+			syncManager = new SyncManager(downloadService, s3Service, hashStoreService, progressService);
 		}
 
-		syncManager.SyncAllAsync().Wait();
+		await syncManager.SyncAllAsync();
 
 		Console.WriteLine("==============================================================================");
 		Console.WriteLine("Sync complete.");
 		Console.WriteLine("==============================================================================");
 		Console.WriteLine("Press any key to exit.");
 		Console.ReadKey();
+	}
+
+	private static string GetCurrentUser() {
+		if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows)) {
+			return WindowsIdentity.GetCurrent().Name;
+		}
+		return $"{Environment.UserDomainName}/${Environment.UserName}";
 	}
 }

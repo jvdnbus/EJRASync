@@ -307,7 +307,19 @@
                     </StackPanel>
                 </Button>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Command="{Binding RebuildHashStoreCommand}"
+                            IsEnabled="{Binding HasWriteAccess}"
+                            Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Margin="0,0,12,0"
+                            ToolTip="Rebuild .zstd hash store from bucket metadata">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/hash.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Rebuild .zstd" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button IsEnabled="False" 
+                            Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}"
                             Style="{StaticResource ModernButtonStyle}"
                             Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal">

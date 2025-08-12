@@ -1,4 +1,4 @@
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public interface IEjraAuthApiService {
 		Task<AuthTokenResponse?> GetTokensAsync(OAuthToken? accessToken = null);
 	}

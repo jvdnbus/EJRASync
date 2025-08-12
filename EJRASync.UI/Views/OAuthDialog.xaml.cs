@@ -1,4 +1,4 @@
-using EJRASync.UI.Services;
+using EJRASync.Lib.Services;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
@@ -46,19 +46,19 @@ namespace EJRASync.UI.Views {
 		public async Task<OAuthToken?> StartAuthenticationAsync() {
 			try {
 				// Generate the auth URL first
-				var authUrl = string.Format(EJRASync.Lib.Constants.EjraAuth, 
-					EJRASync.Lib.Constants.EjraAuthClientId, 
+				var authUrl = string.Format(EJRASync.Lib.Constants.EjraAuth,
+					EJRASync.Lib.Constants.EjraAuthClientId,
 					Uri.EscapeDataString(EJRASync.Lib.Constants.EjraAuthRedirectUri));
-				
+
 				await Dispatcher.InvokeAsync(() => {
 					AuthUrl = authUrl;
 					StatusMessage = "Opening browser for authentication...";
 					ShowUrlTextBox = true;
 				});
-				
+
 				// Start the authentication process
 				var oauthToken = await _authService.AuthenticateAsync();
-				
+
 				if (oauthToken == null) {
 					// If authentication failed, show the URL for manual copy
 					await Dispatcher.InvokeAsync(() => {
@@ -72,15 +72,14 @@ namespace EJRASync.UI.Views {
 					StatusMessage = "Authentication successful!";
 					OAuthToken = oauthToken;
 				});
-				
+
 				// Close dialog after a brief delay
 				await Task.Delay(1000);
 				await Dispatcher.InvokeAsync(() => {
 					DialogResult = true;
 				});
 				return oauthToken;
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				await Dispatcher.InvokeAsync(() => {
 					StatusMessage = $"Authentication failed: {ex.Message}";
 					ShowUrlTextBox = true;
@@ -97,7 +96,7 @@ namespace EJRASync.UI.Views {
 					// Briefly show feedback
 					var originalMessage = StatusMessage;
 					StatusMessage = "URL copied to clipboard!";
-					
+
 					_ = Task.Run(async () => {
 						await Task.Delay(2000);
 						await Dispatcher.InvokeAsync(() => {
@@ -106,8 +105,7 @@ namespace EJRASync.UI.Views {
 							}
 						});
 					});
-				}
-				catch {
+				} catch {
 					// Ignore clipboard errors
 				}
 			}

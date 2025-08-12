@@ -1,20 +1,16 @@
-using EJRASync.Lib;
-using System;
 using System.Diagnostics;
-using System.Net.Http;
-using System.Text.Json;
 using System.Net;
 using System.Text;
-using System.IO;
+using System.Text.Json;
 
-namespace EJRASync.UI.Services {
+namespace EJRASync.Lib.Services {
 	public class EjraAuthService : IEjraAuthService {
 		private readonly HttpClient _httpClient;
 		private readonly string _tokenFilePath;
 
 		public EjraAuthService() {
 			_httpClient = new HttpClient();
-			
+
 			// Store token in the user's AppData folder
 			var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
 			var appFolder = Path.Combine(appDataPath, "EJRASync");
@@ -31,7 +27,7 @@ namespace EJRASync.UI.Services {
 				// Start local HTTP server to listen for the callback
 				var redirectUri = new Uri(Constants.EjraAuthRedirectUri);
 				var listenerPrefix = $"{redirectUri.Scheme}://{redirectUri.Host}:{redirectUri.Port}/";
-				
+
 				var httpListener = new HttpListener();
 				httpListener.Prefixes.Add(listenerPrefix);
 				httpListener.Start();
@@ -56,49 +52,46 @@ namespace EJRASync.UI.Services {
 				}
 
 				return null; // Timeout
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 				return null;
 			}
 		}
 
 		private async Task<OAuthToken?> FetchTokensAsync(string authorizationCode) {
-		try {
-			var formData = new List<KeyValuePair<string, string>>
-			{
+			try {
+				var formData = new List<KeyValuePair<string, string>>
+				{
 				new("grant_type", "authorization_code"),
 				new("code", authorizationCode),
 				new("client_id", Constants.EjraAuthClientId),
 				new("redirect_uri", Constants.EjraAuthRedirectUri)
 			};
 
-			var formContent = new FormUrlEncodedContent(formData);
-			var response = await _httpClient.PostAsync(Constants.EjraAuthTokenExchange, formContent);
+				var formContent = new FormUrlEncodedContent(formData);
+				var response = await _httpClient.PostAsync(Constants.EjraAuthTokenExchange, formContent);
 
-			if (response.IsSuccessStatusCode) {
-				var content = await response.Content.ReadAsStringAsync();
-				var options = new JsonSerializerOptions {
-					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-					PropertyNameCaseInsensitive = true
-				};
+				if (response.IsSuccessStatusCode) {
+					var content = await response.Content.ReadAsStringAsync();
+					var options = new JsonSerializerOptions {
+						PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+						PropertyNameCaseInsensitive = true
+					};
 
-				var tokenResponse = JsonSerializer.Deserialize<OAuthToken>(content, options);
-				return tokenResponse;
-			}
-			else {
-				var errorContent = await response.Content.ReadAsStringAsync();
-				Debug.WriteLine($"Token request failed: {response.StatusCode} - {errorContent}");
+					var tokenResponse = JsonSerializer.Deserialize<OAuthToken>(content, options);
+					return tokenResponse;
+				} else {
+					var errorContent = await response.Content.ReadAsStringAsync();
+					Debug.WriteLine($"Token request failed: {response.StatusCode} - {errorContent}");
+					return null;
+				}
+			} catch (Exception ex) {
+				SentrySdk.CaptureException(ex);
 				return null;
 			}
 		}
-		catch (Exception ex) {
-			SentrySdk.CaptureException(ex);
-			return null;
-		}
-	}
 
-	private async Task<OAuthToken> ListenForAuthTokenAsync(HttpListener httpListener) {
+		private async Task<OAuthToken> ListenForAuthTokenAsync(HttpListener httpListener) {
 			try {
 				var context = await httpListener.GetContextAsync();
 				var request = context.Request;
@@ -130,8 +123,7 @@ namespace EJRASync.UI.Services {
 
 				await SendResponseAsync(response, "Error: Failed to obtain access token");
 				return null;
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 				return null;
 			}
@@ -147,7 +139,7 @@ namespace EJRASync.UI.Services {
 
 				// Decode the payload (second part)
 				var payload = parts[1];
-				
+
 				// Add padding if needed for Base64 decoding
 				switch (payload.Length % 4) {
 					case 2: payload += "=="; break;
@@ -163,8 +155,7 @@ namespace EJRASync.UI.Services {
 				};
 
 				return JsonSerializer.Deserialize<UserTokenClaims>(json, options);
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 				return null;
 			}
@@ -225,11 +216,10 @@ namespace EJRASync.UI.Services {
 					PropertyNameCaseInsensitive = true,
 					WriteIndented = true
 				};
-				
+
 				var json = JsonSerializer.Serialize(token, jsonOptions);
 				await File.WriteAllTextAsync(_tokenFilePath, json);
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 			}
 		}
@@ -250,8 +240,7 @@ namespace EJRASync.UI.Services {
 
 				var token = JsonSerializer.Deserialize<OAuthToken>(json, jsonOptions);
 				return token;
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 				return null;
 			}
@@ -262,8 +251,7 @@ namespace EJRASync.UI.Services {
 				if (File.Exists(_tokenFilePath)) {
 					File.Delete(_tokenFilePath);
 				}
-			}
-			catch (Exception ex) {
+			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 			}
 		}
