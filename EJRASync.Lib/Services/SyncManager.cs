@@ -106,6 +106,11 @@ namespace EJRASync.Lib.Services {
 					var fileName = Path.GetFileName(remoteFile.Key);
 					progress.Report((checkedFiles, fileName));
 
+					// Skip files that match exclusion patterns
+					if (PathUtils.IsExcluded(bucketName, remoteFile.Key)) {
+						continue;
+					}
+
 					var localFilePath = Path.Combine(localPath, remoteFile.Key.Replace('/', Path.DirectorySeparatorChar));
 
 					if (await ShouldDownloadFileAsync(remoteFile, localFilePath, forceInstall)) {

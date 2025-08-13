@@ -110,8 +110,6 @@ namespace EJRASync.UI {
 					});
 
 					await _viewModel.InitializeAsync();
-					// Load initial remote bucket list in background
-					await _viewModel.RemoteFiles.LoadBucketsAsync();
 
 					await this.InvokeUIAsync(() => {
 						_viewModel.StatusMessage = StatusReady;
@@ -491,6 +489,12 @@ namespace EJRASync.UI {
 			// Get the selected file from the PlacementTarget to avoid visual tree searches
 			var selectedFile = _viewModel.RemoteFiles.SelectedFile;
 			if (selectedFile == null) {
+				e.Handled = true;
+				return;
+			}
+
+			// If we're in the root view (showing buckets), don't allow context menu on buckets
+			if (string.IsNullOrEmpty(_viewModel.NavigationContext.SelectedBucket)) {
 				e.Handled = true;
 				return;
 			}

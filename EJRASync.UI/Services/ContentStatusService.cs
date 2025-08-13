@@ -5,29 +5,25 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace EJRASync.UI.Services {
 	public class ContentStatusService : IContentStatusService {
-		private readonly EJRASync.Lib.Services.IS3Service _s3Service;
+		private readonly Lib.Services.IS3Service _s3Service;
 		private readonly Dictionary<string, HashSet<string>> _activeContent;
 		private readonly Dictionary<string, string> _bucketYamlFiles;
 
 		public event EventHandler<ContentStatusChangedEventArgs>? ContentStatusChanged;
 
-		public ContentStatusService(EJRASync.Lib.Services.IS3Service s3Service) {
+		public ContentStatusService(Lib.Services.IS3Service s3Service) {
 			_s3Service = s3Service;
 			_activeContent = new Dictionary<string, HashSet<string>>();
 			_bucketYamlFiles = new Dictionary<string, string>
 			{
-				{ EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.CarsYamlFile },
-				{ EJRASync.Lib.Constants.TracksBucketName, EJRASync.Lib.Constants.TracksYamlFile }
+				{ Lib.Constants.CarsBucketName, Lib.Constants.CarsYamlFile },
+				{ Lib.Constants.TracksBucketName, Lib.Constants.TracksYamlFile }
 			};
 		}
 
 		public async Task InitializeAsync() {
-			var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName };
-
-			foreach (var bucket in buckets) {
-				if (_bucketYamlFiles.TryGetValue(bucket, out var yamlFile)) {
-					await LoadYamlForBucketAsync(bucket, yamlFile);
-				}
+			foreach (var bucket in _bucketYamlFiles) {
+				await LoadYamlForBucketAsync(bucket.Key, bucket.Value);
 			}
 		}
 

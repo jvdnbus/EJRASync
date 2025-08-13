@@ -87,6 +87,27 @@ namespace EJRASync.UI.ViewModels {
 			_mainViewModel.NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(file.FullPath);
 		}
 
+		[RelayCommand(CanExecute = nameof(CanNavigateUp))]
+		private async Task NavigateUpAsync() {
+			var currentPath = _mainViewModel.NavigationContext.LocalCurrentPath;
+			var parentPath = _fileService.GetParentDirectory(currentPath);
+
+			if (!string.IsNullOrEmpty(parentPath) && Directory.Exists(parentPath)) {
+				await LoadFilesAsync(parentPath);
+			}
+		}
+
+		private bool CanNavigateUp() {
+			var currentPath = _mainViewModel.NavigationContext.LocalCurrentPath;
+			var basePath = _mainViewModel.NavigationContext.LocalBasePath;
+			return !string.Equals(currentPath, basePath, StringComparison.OrdinalIgnoreCase);
+		}
+
+		[RelayCommand]
+		private async Task RefreshAsync() {
+			await LoadFilesAsync(_mainViewModel.NavigationContext.LocalCurrentPath);
+		}
+
 		[RelayCommand]
 		private async void CompressAndUpload(LocalFileItem? file) {
 			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());

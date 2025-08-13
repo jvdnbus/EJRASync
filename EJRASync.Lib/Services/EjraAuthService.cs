@@ -73,12 +73,8 @@ namespace EJRASync.Lib.Services {
 
 				if (response.IsSuccessStatusCode) {
 					var content = await response.Content.ReadAsStringAsync();
-					var options = new JsonSerializerOptions {
-						PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-						PropertyNameCaseInsensitive = true
-					};
 
-					var tokenResponse = JsonSerializer.Deserialize<OAuthToken>(content, options);
+					var tokenResponse = JsonSerializer.Deserialize(content, AuthJsonSerializerContext.Default.OAuthToken);
 					return tokenResponse;
 				} else {
 					var errorContent = await response.Content.ReadAsStringAsync();
@@ -91,7 +87,7 @@ namespace EJRASync.Lib.Services {
 			}
 		}
 
-		private async Task<OAuthToken> ListenForAuthTokenAsync(HttpListener httpListener) {
+		private async Task<OAuthToken?> ListenForAuthTokenAsync(HttpListener httpListener) {
 			try {
 				var context = await httpListener.GetContextAsync();
 				var request = context.Request;
@@ -149,12 +145,7 @@ namespace EJRASync.Lib.Services {
 				var jsonBytes = Convert.FromBase64String(payload);
 				var json = Encoding.UTF8.GetString(jsonBytes);
 
-				var options = new JsonSerializerOptions {
-					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-					PropertyNameCaseInsensitive = true
-				};
-
-				return JsonSerializer.Deserialize<UserTokenClaims>(json, options);
+				return JsonSerializer.Deserialize(json, AuthJsonSerializerContext.Default.UserTokenClaims);
 			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
 				return null;
@@ -211,13 +202,7 @@ namespace EJRASync.Lib.Services {
 
 		public async Task SaveTokenAsync(OAuthToken token) {
 			try {
-				var jsonOptions = new JsonSerializerOptions {
-					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-					PropertyNameCaseInsensitive = true,
-					WriteIndented = true
-				};
-
-				var json = JsonSerializer.Serialize(token, jsonOptions);
+				var json = JsonSerializer.Serialize(token, AuthJsonSerializerContext.Default.OAuthToken);
 				await File.WriteAllTextAsync(_tokenFilePath, json);
 			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
@@ -233,12 +218,7 @@ namespace EJRASync.Lib.Services {
 				if (string.IsNullOrWhiteSpace(json))
 					return null;
 
-				var jsonOptions = new JsonSerializerOptions {
-					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-					PropertyNameCaseInsensitive = true
-				};
-
-				var token = JsonSerializer.Deserialize<OAuthToken>(json, jsonOptions);
+				var token = JsonSerializer.Deserialize(json, AuthJsonSerializerContext.Default.OAuthToken);
 				return token;
 			} catch (Exception ex) {
 				SentrySdk.CaptureException(ex);
