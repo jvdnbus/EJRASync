@@ -16,5 +16,33 @@ namespace EJRASync.Lib.Utils {
 
 			return normalized;
 		}
+
+		public static bool IsExcluded(string bucketName, string filePath) {
+			if (string.IsNullOrEmpty(filePath))
+				return false;
+
+			// Normalize the path before checking
+			var normalizedPath = NormalizePath(filePath);
+
+			// Get exclusion patterns for this bucket
+			if (!Constants.ExclusionPatterns.TryGetValue(bucketName, out var patterns))
+				return false;
+
+			// Check if any pattern matches
+			foreach (var pattern in patterns) {
+				if (string.IsNullOrEmpty(pattern))
+					continue;
+
+				try {
+					if (Regex.IsMatch(normalizedPath, pattern, RegexOptions.IgnoreCase)) {
+						return true;
+					}
+				} catch {
+					continue;
+				}
+			}
+
+			return false;
+		}
 	}
 }

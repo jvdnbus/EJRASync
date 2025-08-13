@@ -1,6 +1,6 @@
 ﻿namespace EJRASync.Lib {
 	public static class Constants {
-		public static readonly string Version = "1.0.0";
+		public static readonly string Version = "1.0.1";
 
 		public static readonly string AssettoCorsaAppId = "244210";
 		public static readonly string AssettoCorsaSubPath = @"steamapps\common\assettocorsa";
@@ -9,6 +9,13 @@
 		public static readonly string TracksBucketName = "ejra-tracks";
 		public static readonly string FontsBucketName = "ejra-fonts";
 		public static readonly string AppsBucketName = "ejra-apps";
+
+		public static readonly (string, string)[] Buckets = [
+			(CarsBucketName, "content/cars"),
+			(TracksBucketName, "content/tracks"),
+			(FontsBucketName, "content/fonts"),
+			(AppsBucketName, "apps")
+		];
 
 		public static readonly Dictionary<string, string> SteamRegistryKeys = new()
 		{
@@ -35,5 +42,20 @@
 		public static readonly string GuiExecutableName = "EJRASync.UI.exe";
 
 		public static readonly string UserAgent = "EJRASync.Lib.AutoUpdater";
+
+		public static readonly Dictionary<string, string[]> ExclusionPatterns = new() {
+			{
+				CarsBucketName, new[]
+				{
+					@".*skins/.*/outline\.png$"
+				}
+			}, {
+				TracksBucketName, new string[] {}
+			}, {
+				FontsBucketName, new string[] {}
+			}, {
+				AppsBucketName, new string[] {}
+			}
+		};
 	}
 }

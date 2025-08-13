@@ -202,6 +202,41 @@ namespace EJRASync.UI.ViewModels {
 			});
 		}
 
+		[RelayCommand(CanExecute = nameof(CanNavigateUp))]
+		private async Task NavigateUpAsync() {
+			if (string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket)) {
+				// Already at root showing buckets
+				return;
+			} else if (string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)) {
+				// Go back to bucket list
+				await LoadBucketsAsync();
+			} else {
+				// Go back to parent directory within bucket
+				var parentPrefix = GetParentPrefix(_mainViewModel.NavigationContext.RemoteCurrentPath);
+				await LoadFilesAsync(_mainViewModel.NavigationContext.SelectedBucket!, parentPrefix);
+			}
+		}
+
+		private bool CanNavigateUp() {
+			// Can navigate up if:
+			// 1. We're inside a bucket (SelectedBucket is not null), OR
+			// 2. We're in a subdirectory within a bucket (RemoteCurrentPath is not empty)
+			return !string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket) ||
+				   !string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath);
+		}
+
+		[RelayCommand]
+		private async Task RefreshAsync() {
+			if (string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket)) {
+				// Refresh bucket list
+				await LoadBucketsAsync();
+			} else {
+				// Refresh current directory
+				await LoadFilesAsync(_mainViewModel.NavigationContext.SelectedBucket,
+					_mainViewModel.NavigationContext.RemoteCurrentPath ?? "");
+			}
+		}
+
 		[RelayCommand]
 		private async Task TagAsActiveAsync(RemoteFileItem? file) {
 			var filesToProcess = SelectedFiles.Count > 0

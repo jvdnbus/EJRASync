@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace EJRASync.Lib.Services {
 	public class EjraAuthApiService : IEjraAuthApiService {
@@ -27,27 +26,23 @@ namespace EJRASync.Lib.Services {
 				response.EnsureSuccessStatusCode();
 
 				var content = await response.Content.ReadAsStringAsync();
-				var options = new JsonSerializerOptions {
-					PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-					PropertyNameCaseInsensitive = true
-				};
 
-				var jsonResponse = JsonSerializer.Deserialize<Dictionary<string, object>>(content, options);
+				var jsonResponse = JsonSerializer.Deserialize(content, ApiJsonSerializerContext.Default.DictionaryStringJsonElement);
 				if (jsonResponse == null) return null;
 
 				var result = new AuthTokenResponse();
 
 				if (jsonResponse.ContainsKey(USER_READ_KEY)) {
-					var userReadJson = jsonResponse[USER_READ_KEY].ToString();
+					var userReadJson = jsonResponse[USER_READ_KEY].GetRawText();
 					if (!string.IsNullOrEmpty(userReadJson)) {
-						result.UserRead = JsonSerializer.Deserialize<UserReadTokenJson>(userReadJson, options)?.ToUserReadToken();
+						result.UserRead = JsonSerializer.Deserialize(userReadJson, ApiJsonSerializerContext.Default.UserReadTokenJson)?.ToUserReadToken();
 					}
 				}
 
 				if (jsonResponse.ContainsKey(USER_WRITE_KEY)) {
-					var userWriteJson = jsonResponse[USER_WRITE_KEY].ToString();
+					var userWriteJson = jsonResponse[USER_WRITE_KEY].GetRawText();
 					if (!string.IsNullOrEmpty(userWriteJson)) {
-						result.UserWrite = JsonSerializer.Deserialize<UserWriteTokenJson>(userWriteJson, options)?.ToUserWriteToken();
+						result.UserWrite = JsonSerializer.Deserialize(userWriteJson, ApiJsonSerializerContext.Default.UserWriteTokenJson)?.ToUserWriteToken();
 					}
 				}
 
@@ -61,52 +56,5 @@ namespace EJRASync.Lib.Services {
 		public void Dispose() {
 			_httpClient?.Dispose();
 		}
-	}
-
-	internal class UserReadTokenJson {
-		[JsonPropertyName("cloudflare_token")]
-		public string CloudflareToken { get; set; } = null!;
-
-		[JsonPropertyName("aws")]
-		public AwsCredentialsJson Aws { get; set; } = null!;
-
-		[JsonPropertyName("s3_url")]
-		public string S3Url { get; set; } = null!;
-
-		public UserReadToken ToUserReadToken() => new() {
-			CloudflareToken = CloudflareToken,
-			Aws = Aws.ToAwsCredentials(),
-			S3Url = S3Url
-		};
-	}
-
-	internal class UserWriteTokenJson {
-		[JsonPropertyName("cloudflare_token")]
-		public string CloudflareToken { get; set; } = null!;
-
-		[JsonPropertyName("aws")]
-		public AwsCredentialsJson Aws { get; set; } = null!;
-
-		[JsonPropertyName("s3_url")]
-		public string S3Url { get; set; } = null!;
-
-		public UserWriteToken ToUserWriteToken() => new() {
-			CloudflareToken = CloudflareToken,
-			Aws = Aws.ToAwsCredentials(),
-			S3Url = S3Url
-		};
-	}
-
-	internal class AwsCredentialsJson {
-		[JsonPropertyName("access_key_id")]
-		public string AccessKeyId { get; set; } = null!;
-
-		[JsonPropertyName("secret_access_key")]
-		public string SecretAccessKey { get; set; } = string.Empty;
-
-		public AwsCredentials ToAwsCredentials() => new() {
-			AccessKeyId = AccessKeyId,
-			SecretAccessKey = SecretAccessKey
-		};
 	}
 }

@@ -6,6 +6,7 @@ using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.ViewModels;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Windows;
@@ -97,6 +98,13 @@ namespace EJRASync.UI {
 			NavigationContext.PropertyChanged += (s, e) => {
 				if (e.PropertyName == nameof(NavigationContext.SelectedBucket)) {
 					RebuildHashStoreCommand.NotifyCanExecuteChanged();
+					RemoteFiles.NavigateUpCommand.NotifyCanExecuteChanged();
+				}
+				if (e.PropertyName == nameof(NavigationContext.RemoteCurrentPath)) {
+					RemoteFiles.NavigateUpCommand.NotifyCanExecuteChanged();
+				}
+				if (e.PropertyName == nameof(NavigationContext.LocalCurrentPath)) {
+					LocalFiles.NavigateUpCommand.NotifyCanExecuteChanged();
 				}
 			};
 
@@ -119,6 +127,16 @@ namespace EJRASync.UI {
 
 			// Check for updates on startup
 			_ = Task.Run(CheckForUpdatesAsync);
+
+			// Load initial remote bucket list in background
+			await RemoteFiles.LoadBucketsAsync();
+
+			foreach (var bucket in Constants.Buckets) {
+				var bucketName = bucket.Item1;
+
+				// Initialize bucket hash store
+				await _hashStoreService.InitializeBucketAsync(bucketName);
+			}
 		}
 
 		private async Task TryAutoLoginAsync() {
@@ -132,7 +150,7 @@ namespace EJRASync.UI {
 					// No valid saved token, check for basic read access
 					await CheckWriteAccessAsync();
 				}
-			} catch (Exception ex) {
+			} catch {
 				// If auto-login fails, just check for basic access
 				await CheckWriteAccessAsync();
 			}
@@ -167,14 +185,12 @@ namespace EJRASync.UI {
 				// Update dialog title if it's open
 				UpdatePendingChangesDialogTitle();
 
-				var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName, EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
-				var localFolders = new[] { "content/cars", "content/tracks", "content/fonts", "apps" };
-
+				var buckets = Constants.Buckets;
 				for (int i = 0; i < buckets.Length; i++) {
 					_operationCancellationTokenSource.Token.ThrowIfCancellationRequested();
 
-					var bucket = buckets[i];
-					var localFolder = localFolders[i];
+					var bucket = buckets[i].Item1;
+					var localFolder = buckets[i].Item2;
 					var localPath = Path.Combine(NavigationContext.LocalBasePath, localFolder);
 
 					if (Directory.Exists(localPath)) {
@@ -281,27 +297,56 @@ namespace EJRASync.UI {
 			var remoteFilesByKey = remoteFiles.ToDictionary(r => r.Key, r => r);
 
 			// Process each local file against the remote files
+			var processedCount = 0;
+			var totalFiles = localFiles.Count;
 			foreach (var localFile in localFiles) {
 				cancellationToken.ThrowIfCancellationRequested();
 
+				processedCount++;
 				var relativePath = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
 
-				if (remoteFilesByKey.TryGetValue(relativePath, out var remoteFile)) {
-					// File exists - check if changed
-					var localHash = await _fileService.CalculateFileHashAsync(localFile.FullPath);
-					var remoteOriginalHash = remoteFile.OriginalHash;
+				// Update status message to show current file being compared with progress
+				if (!IsCancelling) {
+					StatusMessage = $"Comparing {bucketName} : ({processedCount}/{totalFiles}) {Path.GetFileName(localFile.FullPath)}";
+				}
 
-					if (remoteOriginalHash == null || localHash != remoteOriginalHash) {
+				// Skip files that match exclusion patterns
+				if (PathUtils.IsExcluded(bucketName, relativePath)) {
+					continue;
+				}
+
+				try {
+					if (remoteFilesByKey.TryGetValue(relativePath, out var remoteFile)) {
+						// File exists - check if changed
+						var localHash = await _fileService.CalculateFileHashAsync(localFile.FullPath);
+						var remoteOriginalHash = remoteFile.OriginalHash;
+
+						if (remoteOriginalHash == null || localHash != remoteOriginalHash) {
+							AddUploadChange(bucketName, basePath, localFile, relativePath);
+						}
+					} else {
+						// File doesn't exist remotely - needs upload
 						AddUploadChange(bucketName, basePath, localFile, relativePath);
 					}
-				} else {
-					// File doesn't exist remotely - needs upload
-					AddUploadChange(bucketName, basePath, localFile, relativePath);
+				} catch (Exception ex) {
+					// Log the error but continue processing other files
+					Console.WriteLine($"Error processing file {relativePath}: {ex.Message}");
+					Sentry.SentrySdk.CaptureException(ex, scope => {
+						scope.SetTag("operation", "file-scan");
+						scope.SetTag("bucket", bucketName);
+						scope.SetTag("file", relativePath);
+					});
+					continue;
 				}
 			}
 		}
 
 		private void AddUploadChange(string bucketName, string basePath, LocalFileItem localFile, string remoteKey) {
+			// Double-check exclusion patterns before adding change
+			if (PathUtils.IsExcluded(bucketName, remoteKey)) {
+				return;
+			}
+
 			var shouldCompress = _compressionService.ShouldCompress(localFile.Name, localFile.SizeBytes);
 			var changeType = shouldCompress ? ChangeType.CompressAndUpload : ChangeType.RawUpload;
 			var description = Path.GetRelativePath(basePath, localFile.FullPath).Replace(Path.DirectorySeparatorChar, '/');
@@ -320,6 +365,9 @@ namespace EJRASync.UI {
 			ViewChangesCommand.NotifyCanExecuteChanged();
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+
+			// Update dialog title if it's open
+			UpdatePendingChangesDialogTitle();
 		}
 
 		private bool CanScanChanges() => !IsScanning && !IsApplying && !IsCancelling;
@@ -362,7 +410,7 @@ namespace EJRASync.UI {
 			StatusMessage = "Changes discarded";
 		}
 
-		private bool CanDiscardChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
+		private bool CanDiscardChanges() => PendingChanges.Count > 0 && !IsApplying && !IsScanning && HasWriteAccess;
 
 		[RelayCommand(CanExecute = nameof(CanApplyChanges))]
 		private async Task ApplyChangesAsync() {
@@ -377,6 +425,7 @@ namespace EJRASync.UI {
 			try {
 				var totalChanges = PendingChanges.Count;
 				var processedChanges = 0;
+				var activeChanges = new ConcurrentDictionary<string, string>();
 
 				var parallelOptions = new ParallelOptions {
 					MaxDegreeOfParallelism = Math.Max(1, Environment.ProcessorCount - 1),
@@ -384,25 +433,33 @@ namespace EJRASync.UI {
 				};
 
 				await Parallel.ForEachAsync(PendingChanges, parallelOptions, async (change, ct) => {
+					var changeId = Guid.NewGuid().ToString();
 					try {
 						ct.ThrowIfCancellationRequested();
+
+						// Add to active changes tracking
+						activeChanges.TryAdd(changeId, change.Description);
+						UpdateApplyingStatus(processedChanges, totalChanges, activeChanges);
+
 						await ProcessChangeAsync(change, ct);
 					} catch (OperationCanceledException) {
 						// Cancel
 					} catch (Exception ex) {
 						Console.WriteLine($"Error processing {change.Description}: {ex.Message}");
 					} finally {
+						// Remove from active changes and increment processed count
+						activeChanges.TryRemove(changeId, out _);
 						Interlocked.Increment(ref processedChanges);
 						if (!IsCancelling) {
 							ProgressValue = processedChanges * 100.0 / totalChanges;
-							StatusMessage = $"({processedChanges}/{totalChanges}) {change.Description}...";
+							UpdateApplyingStatus(processedChanges, totalChanges, activeChanges);
 						}
 					}
 				});
 
 				// Check for dirty hash stores and add UpdateHashStore pending changes
-				var buckets = new[] { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName,
-									  EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
+				var buckets = new[] { Constants.CarsBucketName, Constants.TracksBucketName,
+									  Constants.FontsBucketName, Constants.AppsBucketName };
 
 				foreach (var bucket in buckets) {
 					if (_hashStoreService.IsDirty(bucket)) {
@@ -555,7 +612,7 @@ namespace EJRASync.UI {
 			}
 		}
 
-		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && HasWriteAccess;
+		private bool CanApplyChanges() => PendingChanges.Count > 0 && !IsApplying && !IsScanning && HasWriteAccess;
 
 		[RelayCommand(CanExecute = nameof(CanCancelOperation))]
 		private void CancelOperation() {
@@ -700,6 +757,11 @@ namespace EJRASync.UI {
 
 		partial void OnIsApplyingChanged(bool value) {
 			RebuildHashStoreCommand.NotifyCanExecuteChanged();
+		}
+
+		partial void OnIsScanningChanged(bool value) {
+			DiscardChangesCommand.NotifyCanExecuteChanged();
+			ApplyChangesCommand.NotifyCanExecuteChanged();
 		}
 
 		private void UpdatePendingChangesDialogTitle() {
@@ -862,6 +924,24 @@ namespace EJRASync.UI {
 			Application.Current.Dispatcher.InvokeAsync(() => {
 				ProgressValue = progress;
 			});
+		}
+
+		private void UpdateApplyingStatus(int processedChanges, int totalChanges, ConcurrentDictionary<string, string> activeChanges) {
+			if (IsCancelling) return;
+
+			var activeCount = activeChanges.Count;
+			var currentTask = activeCount > 0 ? activeChanges.Values.FirstOrDefault() : null;
+
+			string statusMessage;
+			if (activeCount > 1 && !string.IsNullOrEmpty(currentTask)) {
+				statusMessage = $"({processedChanges}/{totalChanges}) {currentTask}... (+{activeCount - 1} more)";
+			} else if (!string.IsNullOrEmpty(currentTask)) {
+				statusMessage = $"({processedChanges}/{totalChanges}) {currentTask}...";
+			} else {
+				statusMessage = $"Processing changes... ({processedChanges}/{totalChanges})";
+			}
+
+			StatusMessage = statusMessage;
 		}
 	}
 }

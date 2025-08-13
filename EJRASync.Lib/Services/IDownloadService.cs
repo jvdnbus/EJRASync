@@ -17,6 +17,7 @@ namespace EJRASync.Lib.Services {
 		public long CurrentFileTotal { get; set; }
 		public bool IsDecompressing { get; set; }
 		public List<FileProgress> ActiveDownloads { get; set; } = new();
+		public List<FileProgress> FailedDownloads { get; set; } = new();
 	}
 
 	public class FileProgress {
@@ -24,5 +25,7 @@ namespace EJRASync.Lib.Services {
 		public long CompletedBytes { get; set; }
 		public long TotalBytes { get; set; }
 		public bool IsDecompressing { get; set; }
+		public bool IsFailed { get; set; }
+		public string ErrorMessage { get; set; } = string.Empty;
 	}
 }

@@ -47,7 +47,7 @@ namespace EJRASync.Lib.Services {
 						File.Delete(tempFilePath);
 					}
 				}
-			} catch (Exception ex) {
+			} catch {
 				// Hash store doesn't exist yet, start with empty store
 				_progressService.ShowMessage($"No existing hash store found for {bucketName}, creating new one");
 			}

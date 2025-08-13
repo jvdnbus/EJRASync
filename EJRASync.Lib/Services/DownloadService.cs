@@ -1,4 +1,5 @@
 using EJRASync.Lib.Models;
+using EJRASync.Lib.Utils;
 using System.Collections.Concurrent;
 
 namespace EJRASync.Lib.Services {
@@ -62,6 +63,7 @@ namespace EJRASync.Lib.Services {
 			};
 
 			var activeDownloads = new ConcurrentDictionary<string, FileProgress>();
+			var failedDownloads = new ConcurrentBag<FileProgress>();
 			var completedFiles = 0;
 			long completedBytes = 0;
 
@@ -69,7 +71,7 @@ namespace EJRASync.Lib.Services {
 				await _downloadSemaphore.WaitAsync();
 				try {
 					var fileProgress = new FileProgress {
-						FileName = file.Name,
+						FileName = PathUtils.NormalizePath(file.Key),
 						TotalBytes = file.SizeBytes
 					};
 
@@ -78,13 +80,30 @@ namespace EJRASync.Lib.Services {
 					// Update progress with active downloads
 					UpdateProgress();
 
-					await DownloadFileWithRetryAsync(file, bucketName, localBasePath, fileProgress, UpdateProgress);
+					try {
+						await DownloadFileWithRetryAsync(file, bucketName, localBasePath, fileProgress, UpdateProgress);
 
-					// Mark as completed
-					Interlocked.Increment(ref completedFiles);
-					Interlocked.Add(ref completedBytes, file.SizeBytes);
+						// Mark as completed
+						Interlocked.Increment(ref completedFiles);
+						Interlocked.Add(ref completedBytes, file.SizeBytes);
+					} catch (Exception ex) {
+						SentrySdk.CaptureException(ex, scope => {
+							scope.SetTag("operation", "file-download");
+							scope.SetTag("bucket", bucketName);
+							scope.SetTag("file", PathUtils.NormalizePath(file.Key));
+						});
+
+						// Mark file progress as failed
+						fileProgress.IsFailed = true;
+						fileProgress.ErrorMessage = ex.Message;
+
+						// Add to failed downloads collection
+						failedDownloads.Add(fileProgress);
+
+						// Continue with other files
+					}
+
 					activeDownloads.TryRemove(file.Key, out _);
-
 					UpdateProgress();
 				} finally {
 					_downloadSemaphore.Release();
@@ -97,6 +116,7 @@ namespace EJRASync.Lib.Services {
 				progressData.CompletedFiles = completedFiles;
 				progressData.CompletedBytes = completedBytes;
 				progressData.ActiveDownloads = activeDownloads.Values.ToList();
+				progressData.FailedDownloads = failedDownloads.ToList();
 				progress.Report(progressData);
 			}
 

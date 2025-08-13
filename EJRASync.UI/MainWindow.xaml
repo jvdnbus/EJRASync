@@ -300,7 +300,9 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                     <Button Command="{Binding ScanChangesCommand}" 
                             Style="{StaticResource ModernButtonStyle}"
-                            Margin="0,0,12,0" IsEnabled="False">
+                            Margin="0,0,12,0"
+                            IsEnabled="{Binding HasWriteAccess}"
+                            Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Orientation="Horizontal">
                             <Image Source="/Assets/Icons/search.png" Width="16" Height="16" Margin="0,0,8,0"/>
                             <TextBlock Text="Scan Changes" VerticalAlignment="Center"/>
@@ -449,16 +451,183 @@
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Remote Storage" 
                            FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"/>
                 
-                <!-- Path TextBoxes -->
-                <TextBox Grid.Row="2" Grid.Column="0" 
-                         Text="{Binding NavigationContext.LocalCurrentPath, Mode=OneWay}" 
-                         IsReadOnly="True" 
-                         Style="{StaticResource ModernTextBoxStyle}"/>
+                <!-- Local Path Navigation -->
+                <Grid Grid.Row="2" Grid.Column="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Local Up Directory Button -->
+                    <Button Grid.Column="0" 
+                            Command="{Binding LocalFiles.NavigateUpCommand}"
+                            Width="40" Height="40"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E42"
+                            BorderThickness="1"
+                            ToolTip="Go up one directory">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#3E3E42"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#252526"/>
+                                        <Setter Property="BorderBrush" Value="#333"/>
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="/Assets/Icons/arrow-up.png" Width="20" Height="20"/>
+                    </Button>
+                    
+                    <!-- Local Refresh Button -->
+                    <Button Grid.Column="2" 
+                            Command="{Binding LocalFiles.RefreshCommand}"
+                            Width="40" Height="40"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E42"
+                            BorderThickness="1"
+                            ToolTip="Refresh directory">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#3E3E42"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#252526"/>
+                                        <Setter Property="BorderBrush" Value="#333"/>
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="/Assets/Icons/refresh.png" Width="20" Height="20"/>
+                    </Button>
+                    
+                    <!-- Local Path TextBox -->
+                    <TextBox Grid.Column="4" 
+                             Text="{Binding NavigationContext.LocalCurrentPath, Mode=OneWay}" 
+                             IsReadOnly="True" 
+                             Style="{StaticResource ModernTextBoxStyle}"/>
+                </Grid>
                 
-                <TextBox Grid.Row="2" Grid.Column="2" 
-                         Text="{Binding RemoteFiles.CurrentPath, Mode=OneWay}" 
-                         IsReadOnly="True" 
-                         Style="{StaticResource ModernTextBoxStyle}"/>
+                <!-- Remote Path Navigation -->
+                <Grid Grid.Row="2" Grid.Column="2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Remote Up Directory Button -->
+                    <Button Grid.Column="0" 
+                            Command="{Binding RemoteFiles.NavigateUpCommand}"
+                            Width="40" Height="40"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E42"
+                            BorderThickness="1"
+                            ToolTip="Go up one directory">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#3E3E42"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#252526"/>
+                                        <Setter Property="BorderBrush" Value="#333"/>
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="/Assets/Icons/arrow-up.png" Width="20" Height="20"/>
+                    </Button>
+                    
+                    <!-- Remote Refresh Button -->
+                    <Button Grid.Column="2" 
+                            Command="{Binding RemoteFiles.RefreshCommand}"
+                            Width="40" Height="40"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E42"
+                            BorderThickness="1"
+                            ToolTip="Refresh directory">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                                    VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#3E3E42"/>
+                                        <Setter Property="BorderBrush" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter Property="Background" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Background" Value="#252526"/>
+                                        <Setter Property="BorderBrush" Value="#333"/>
+                                        <Setter Property="Opacity" Value="0.5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="/Assets/Icons/refresh.png" Width="20" Height="20"/>
+                    </Button>
+                    
+                    <!-- Remote Path TextBox -->
+                    <TextBox Grid.Column="4" 
+                             Text="{Binding RemoteFiles.CurrentPath, Mode=OneWay}" 
+                             IsReadOnly="True" 
+                             Style="{StaticResource ModernTextBoxStyle}"/>
+                </Grid>
             </Grid>
         </Border>
 

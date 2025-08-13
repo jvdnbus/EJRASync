@@ -25,7 +25,10 @@ namespace EJRASync.Lib.Services {
 						fileTasks[i].Value = 0;
 					}
 
-					var progress = new Progress<DownloadProgress>(p => {
+					DownloadProgress? finalProgress = null;
+					var progressWithCapture = new Progress<DownloadProgress>(p => {
+						finalProgress = p;
+
 						// Update overall progress
 						if (p.TotalFiles > 0) {
 							var overallPercent = (double)p.CompletedFiles / p.TotalFiles * 100;
@@ -44,9 +47,15 @@ namespace EJRASync.Lib.Services {
 								task.MaxValue = Math.Max(download.TotalBytes, 1);
 								task.Value = download.CompletedBytes;
 
-								var description = download.IsDecompressing
-									? $"[yellow]Decompressing[/] [dim]{download.FileName}[/]"
-									: $"[blue]Downloading[/] [dim]{download.FileName}[/]";
+								string description;
+								if (download.IsFailed) {
+									description = $"[red](x) Failed[/] [dim]{download.FileName}[/] - [red]{download.ErrorMessage}[/]";
+									task.Value = task.MaxValue; // Show as complete but failed
+								} else if (download.IsDecompressing) {
+									description = $"[yellow]Decompressing[/] [dim]{download.FileName}[/]";
+								} else {
+									description = $"[blue]Downloading[/] [dim]{download.FileName}[/]";
+								}
 								task.Description = description;
 							} else {
 								// Hide unused tasks
@@ -67,7 +76,7 @@ namespace EJRASync.Lib.Services {
 						}
 					});
 
-					await operation(progress);
+					await operation(progressWithCapture);
 
 					// Ensure overall progress shows 100% when complete
 					overallTask.Value = 100;
@@ -77,6 +86,13 @@ namespace EJRASync.Lib.Services {
 					for (int i = 0; i < MaxIndividualProgressBars; i++) {
 						fileTasks[i].Description = "[green](✓) Complete[/]";
 						fileTasks[i].Value = fileTasks[i].MaxValue;
+					}
+
+					// Show failed downloads after completion
+					if (finalProgress?.FailedDownloads.Count != 0) {
+						foreach (var failed in finalProgress!.FailedDownloads) {
+							AnsiConsole.MarkupLine($"[red](x) Failed to download:[/] [dim]{failed.FileName}[/] - [red]{failed.ErrorMessage}[/]");
+						}
 					}
 				});
 		}
@@ -95,7 +111,13 @@ namespace EJRASync.Lib.Services {
 
 					var progress = new Progress<(int progress, string currentFile)>(p => {
 						task.Value = p.progress;
-						var fileInfo = !string.IsNullOrEmpty(p.currentFile) ? $" - [dim]{p.currentFile}[/]" : "";
+						// Pad or truncate filename to prevent progress bar jumping
+						var fileName = p.currentFile ?? "";
+						if (fileName.Length > 50) {
+							fileName = "..." + fileName.Substring(fileName.Length - 47); // Keep end of path visible
+						}
+						fileName = fileName.PadRight(50); // Pad to fixed width
+						var fileInfo = !string.IsNullOrEmpty(p.currentFile) ? $" - [dim]{fileName}[/]" : "";
 						task.Description = $"[blue]{description}[/] ([cyan]{p.progress}/{total}[/]){fileInfo}";
 					});
 
@@ -110,7 +132,12 @@ namespace EJRASync.Lib.Services {
 		private async Task RunWithSimplePercentageProgressAsync(string description, int total, Func<IProgress<(int progress, string currentFile)>, Task> operation) {
 			var progress = new Progress<(int progress, string currentFile)>(p => {
 				var percent = total > 0 ? (double)p.progress / total * 100 : 100;
-				var fileInfo = !string.IsNullOrEmpty(p.currentFile) ? $" - {p.currentFile}" : "";
+				// For non-interactive terminals, we don't need to worry, but still truncate very long paths
+				var fileName = p.currentFile ?? "";
+				if (fileName.Length > 60) {
+					fileName = "..." + fileName.Substring(fileName.Length - 57);
+				}
+				var fileInfo = !string.IsNullOrEmpty(p.currentFile) ? $" - {fileName}" : "";
 				Console.WriteLine($"{description}: {percent:F1}% ({p.progress}/{total}){fileInfo}");
 			});
 
@@ -119,7 +146,9 @@ namespace EJRASync.Lib.Services {
 		}
 
 		private async Task RunWithPercentageProgressAsync(Func<IProgress<DownloadProgress>, Task> operation) {
+			DownloadProgress? finalProgress = null;
 			var progress = new Progress<DownloadProgress>(p => {
+				finalProgress = p;
 				if (p.TotalFiles > 0) {
 					var percent = (double)p.CompletedFiles / p.TotalFiles * 100;
 					Console.WriteLine($"Progress: {percent:F1}% ({p.CompletedFiles}/{p.TotalFiles} files)");
@@ -127,8 +156,12 @@ namespace EJRASync.Lib.Services {
 					if (p.ActiveDownloads.Any()) {
 						var currentFile = p.ActiveDownloads.FirstOrDefault();
 						if (currentFile != null) {
-							var status = currentFile.IsDecompressing ? "Decompressing" : "Downloading";
-							Console.WriteLine($"  {status}: {currentFile.FileName}");
+							if (currentFile.IsFailed) {
+								Console.WriteLine($"  (x) Failed: {currentFile.FileName} - {currentFile.ErrorMessage}");
+							} else {
+								var status = currentFile.IsDecompressing ? "Decompressing" : "Downloading";
+								Console.WriteLine($"  {status}: {currentFile.FileName}");
+							}
 						}
 					}
 				}
@@ -136,6 +169,15 @@ namespace EJRASync.Lib.Services {
 
 			await operation(progress);
 			Console.WriteLine("(✓) Download Complete");
+
+			// Show failed downloads after completion
+			if (finalProgress?.FailedDownloads.Any() == true) {
+				Console.WriteLine();
+				Console.WriteLine("Failed Downloads:");
+				foreach (var failed in finalProgress.FailedDownloads) {
+					Console.WriteLine($"  (x) {failed.FileName} - {failed.ErrorMessage}");
+				}
+			}
 		}
 
 		private static string GetFileKey(string fileName) {
@@ -148,7 +190,7 @@ namespace EJRASync.Lib.Services {
 		}
 
 		public void ShowError(string error) {
-			AnsiConsole.MarkupLine($"[red](X)[/] {error}");
+			AnsiConsole.MarkupLine($"[red](x)[/] {error}");
 		}
 
 		public void ShowSuccess(string message) {
