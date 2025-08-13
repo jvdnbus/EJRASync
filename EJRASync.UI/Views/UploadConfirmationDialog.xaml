@@ -1,0 +1,92 @@
+<local:DarkThemeWindow x:Class="EJRASync.UI.Views.UploadConfirmationDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:EJRASync.UI.Views"
+        Title="Compress &amp; upload" 
+        Height="Auto" Width="429" 
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        WindowStyle="SingleBorderWindow" Background="#FF2D2D30" SizeToContent="Height">
+    
+    <local:DarkThemeWindow.Resources>
+        <!-- Modern Button Style -->
+        <Style x:Key="DialogButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="20,8"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3E3E42"/>
+                                <Setter Property="BorderBrush" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsDefault" Value="True">
+                                <Setter Property="Background" Value="#094771"/>
+                                <Setter Property="BorderBrush" Value="#007ACC"/>
+                                <Setter Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </local:DarkThemeWindow.Resources>
+    
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- Message -->
+        <TextBlock Grid.Row="0" 
+                   x:Name="MessageTextBlock"
+                   Text="Would you like to compress before uploading?"
+                   FontSize="14"
+                   Foreground="#F0F0F0"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,10"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" 
+                    Orientation="Horizontal" 
+                    HorizontalAlignment="Right"
+                    Margin="0,10,0,0">
+            <Button x:Name="YesButton" 
+                    Content="Yes [Y]"
+                    Style="{StaticResource DialogButtonStyle}"
+                    IsDefault="True"
+                    Click="YesButton_Click"
+                    Margin="0,0,10,0"/>
+            <Button x:Name="NoButton" 
+                    Content="No [N]"
+                    Style="{StaticResource DialogButtonStyle}"
+                    Click="NoButton_Click"
+                    Margin="0,0,10,0"/>
+            <Button x:Name="CancelButton" 
+                    Content="Cancel [Esc]"
+                    Style="{StaticResource DialogButtonStyle}"
+                    IsCancel="True"
+                    Click="CancelButton_Click"/>
+        </StackPanel>
+    </Grid>
+</local:DarkThemeWindow>
