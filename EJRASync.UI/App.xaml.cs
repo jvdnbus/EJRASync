@@ -15,7 +15,7 @@ namespace EJRASync.UI {
 			var currentUser = WindowsIdentity.GetCurrent().Name;
 
 			DispatcherUnhandledException += App_DispatcherUnhandledException;
-			SentrySdk.Init(options => {
+			Sentry.SentrySdk.Init(options => {
 				options.Dsn = Constants.SentryDSN;
 				options.Debug = false;
 				options.AutoSessionTracking = true;
@@ -23,13 +23,13 @@ namespace EJRASync.UI {
 				options.ProfilesSampleRate = 1.0;
 			});
 
-			SentrySdk.ConfigureScope(scope => {
+			Sentry.SentrySdk.ConfigureScope(scope => {
 				scope.SetTag("username", currentUser);
 			});
 		}
 
 		private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
-			SentrySdk.CaptureException(e.Exception);
+			Sentry.SentrySdk.CaptureException(e.Exception);
 		}
 
 		protected override async void OnStartup(StartupEventArgs e) {

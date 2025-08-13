@@ -49,10 +49,10 @@ class CLI {
 		};
 		var s3Client = new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, s3Config);
 
-		var autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.ExecutableName}");
-		autoUpdater.ProcessUpdates().Wait();
-
 		var progressService = new SpectreProgressService();
+		var autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.CliExecutableName}", progressService.ShowMessage);
+		await autoUpdater.ProcessUpdates();
+		
 		var fileService = new FileService();
 		var compressionService = new CompressionService();
 
@@ -79,10 +79,13 @@ class CLI {
 
 		await syncManager.SyncAllAsync();
 
-		Console.WriteLine("==============================================================================");
-		Console.WriteLine("Sync complete.");
-		Console.WriteLine("==============================================================================");
-		Console.WriteLine("Press any key to exit.");
+		var rule = new Rule();
+		AnsiConsole.Write(rule);
+		var completeRule = new Rule("Sync complete!");
+		completeRule.LeftJustified();
+		AnsiConsole.Write(completeRule);
+		AnsiConsole.Write(rule);
+		AnsiConsole.WriteLine("Press any key to exit...");
 		Console.ReadKey();
 	}
 

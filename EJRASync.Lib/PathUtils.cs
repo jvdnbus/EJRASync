@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace EJRASync.UI.Utils {
+namespace EJRASync.Lib.Utils {
 	public static class PathUtils {
 		private static readonly Regex DuplicateForwardSlashRegex = new(@"/{2,}", RegexOptions.Compiled);
 

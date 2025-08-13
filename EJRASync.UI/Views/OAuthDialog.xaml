@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EJRASync.UI.Views"
         mc:Ignorable="d"
-        Title="Login" Height="370" Width="600" 
+        Title="Login" Height="331" Width="600" 
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize">
     
@@ -103,19 +103,14 @@
         <!-- Header -->
         <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" Padding="20,16">
             <StackPanel>
-                <TextBlock Text="Authenticate to get write access for uploading and managing content." 
+                <TextBlock Text="Authenticate to get write access to upload and manage content." 
                           FontSize="13" Foreground="#CCCCCC"/>
             </StackPanel>
         </Border>
         
-        <!-- Content -->
         <StackPanel Grid.Row="1" Margin="20" VerticalAlignment="Center">
-            <TextBlock Text="Browser Authentication" FontSize="16" FontWeight="SemiBold" Foreground="#F0F0F0" Margin="0,0,0,8"/>
-            
-            <TextBlock Text="{Binding StatusMessage}" FontSize="14" Foreground="#CCCCCC" 
-                      TextWrapping="Wrap" Margin="0,0,0,8"/>
-            
-            <!-- URL TextBox (shown when browser fails to open) -->
+            <TextBlock Text="{Binding StatusMessage}" FontSize="16" FontWeight="SemiBold" Foreground="#F0F0F0" TextWrapping="Wrap" Margin="0,0,0,8"/>
+
             <Grid Visibility="{Binding ShowUrlTextBox, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>

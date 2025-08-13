@@ -14,6 +14,7 @@
     <ApplicationIcon>ejra-icon.ico</ApplicationIcon>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <StartupObject>CLI</StartupObject>
+    <Configurations>Debug;Release</Configurations>
   </PropertyGroup>
 
   <ItemGroup>

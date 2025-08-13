@@ -152,7 +152,7 @@ namespace EJRASync.Lib.Services {
 		}
 
 		public void ShowSuccess(string message) {
-			AnsiConsole.MarkupLine($"[green]((✓))[/] {message}");
+			AnsiConsole.MarkupLine($"[green](✓)[/] {message}");
 		}
 	}
 }

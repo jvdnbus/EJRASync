@@ -31,7 +31,8 @@
 
 		public static readonly string GithubReleaseURL = "https://api.github.com/repos/jvdnbus/ejrasync/releases/latest";
 
-		public static readonly string ExecutableName = "EJRASync.CLI.exe";
+		public static readonly string CliExecutableName = "EJRASync.CLI.exe";
+		public static readonly string GuiExecutableName = "EJRASync.UI.exe";
 
 		public static readonly string UserAgent = "EJRASync.Lib.AutoUpdater";
 	}

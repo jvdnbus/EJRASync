@@ -8,6 +8,7 @@
     <SelfContained>true</SelfContained>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <Configurations>Debug;Release</Configurations>
   </PropertyGroup>
 
   <ItemGroup>

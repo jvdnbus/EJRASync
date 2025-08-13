@@ -297,15 +297,39 @@
         <!-- Top Bar -->
         <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1">
             <Grid Margin="20,12">
-                <Button Command="{Binding ScanChangesCommand}" 
-                        Style="{StaticResource ModernButtonStyle}"
-                        HorizontalAlignment="Left"
-                        Margin="0,0,12,0" IsEnabled="False">
-                    <StackPanel Orientation="Horizontal">
-                        <Image Source="/Assets/Icons/search.png" Width="16" Height="16" Margin="0,0,8,0"/>
-                        <TextBlock Text="Scan Changes" VerticalAlignment="Center"/>
-                    </StackPanel>
-                </Button>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Command="{Binding ScanChangesCommand}" 
+                            Style="{StaticResource ModernButtonStyle}"
+                            Margin="0,0,12,0" IsEnabled="False">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/search.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Scan Changes" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <Button Command="{Binding UpdateAvailableCommand}"
+                            Visibility="{Binding IsUpdateAvailable, Converter={StaticResource BooleanToVisibilityConverter}}"
+                            Style="{StaticResource ModernButtonStyle}"
+                            Background="#2D4A2D"
+                            Foreground="#4CAF50"
+                            BorderBrush="#3A5A3A"
+                            Margin="0,0,12,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/download.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock VerticalAlignment="Center">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Text" Value="Update Available"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDownloadingUpdate}" Value="True">
+                                                <Setter Property="Text" Value="Downloading..."/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button Command="{Binding RebuildHashStoreCommand}"
                             IsEnabled="{Binding HasWriteAccess}"
@@ -347,8 +371,9 @@
                             </StackPanel>
                         </Button>
                         
-                        <!-- User Profile Chip (when logged in) -->
-                        <Button Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Button Command="{Binding LogoutCommand}" 
+                                Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                ToolTip="Logout">
                             <Button.Style>
                                 <Style TargetType="Button" BasedOn="{StaticResource ModernButtonStyle}">
                                     <Setter Property="Padding" Value="16,4"/>
@@ -392,41 +417,10 @@
                                                Foreground="#AAAAAA"/>
                                 </StackPanel>
                                 
-                                <!-- Logout Button -->
-                                <Button Command="{Binding LogoutCommand}"
-                                        Background="Transparent"
-                                        BorderThickness="0"
-                                        Padding="4"
-                                        Margin="8,0,0,0"
-                                        ToolTip="Logout">
-                                    <Image Source="/Assets/Icons/logout.png" Width="14" Height="14" Opacity="0.7"/>
-                                    <Button.Style>
-                                        <Style TargetType="Button">
-                                            <Setter Property="Background" Value="Transparent"/>
-                                            <Setter Property="Template">
-                                                <Setter.Value>
-                                                    <ControlTemplate TargetType="Button">
-                                                        <Border Background="{TemplateBinding Background}"
-                                                                BorderBrush="{TemplateBinding BorderBrush}"
-                                                                BorderThickness="{TemplateBinding BorderThickness}"
-                                                                CornerRadius="10"
-                                                                Padding="{TemplateBinding Padding}">
-                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        </Border>
-                                                        <ControlTemplate.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter Property="Background" Value="#3E3E42"/>
-                                                            </Trigger>
-                                                            <Trigger Property="IsPressed" Value="True">
-                                                                <Setter Property="Background" Value="#555"/>
-                                                            </Trigger>
-                                                        </ControlTemplate.Triggers>
-                                                    </ControlTemplate>
-                                                </Setter.Value>
-                                            </Setter>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
+                                <Image Source="/Assets/Icons/logout.png" 
+                                       Width="14" Height="14" 
+                                       Opacity="0.7"
+                                       Margin="8,0,0,0"/>
                             </StackPanel>
                         </Button>
                     </Grid>

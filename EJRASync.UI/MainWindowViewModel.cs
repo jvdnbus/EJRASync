@@ -1,9 +1,10 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using EJRASync.Lib;
 using EJRASync.Lib.Services;
+using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
-using EJRASync.UI.Utils;
 using EJRASync.UI.ViewModels;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -58,9 +59,17 @@ namespace EJRASync.UI {
 		[ObservableProperty]
 		private string? _userProviderName;
 
+		[ObservableProperty]
+		private bool _isUpdateAvailable = false;
+
+		[ObservableProperty]
+		private bool _isDownloadingUpdate = false;
+
 		private OAuthToken? _currentOAuthToken;
 		private Views.PendingChangesDialog? _pendingChangesDialog;
 		private CancellationTokenSource? _operationCancellationTokenSource;
+		private AutoUpdater? _autoUpdater;
+		private GitHubRelease? _availableUpdate;
 
 		public LocalFileListViewModel LocalFiles { get; }
 		public RemoteFileListViewModel RemoteFiles { get; }
@@ -96,6 +105,9 @@ namespace EJRASync.UI {
 			var acPath = EJRASync.Lib.SteamHelper.FindAssettoCorsa(steamPath);
 			NavigationContext.LocalBasePath = acPath;
 			NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(Path.Combine(acPath, "content"));
+
+			// Initialize auto updater
+			_autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.GuiExecutableName}", LogMessage, UpdateProgress);
 		}
 
 		public async Task InitializeAsync() {
@@ -104,6 +116,9 @@ namespace EJRASync.UI {
 
 			// Try auto-login with saved token
 			await TryAutoLoginAsync();
+
+			// Check for updates on startup
+			_ = Task.Run(CheckForUpdatesAsync);
 		}
 
 		private async Task TryAutoLoginAsync() {
@@ -579,7 +594,7 @@ namespace EJRASync.UI {
 				}
 			} catch (Exception ex) {
 				StatusMessage = $"Login failed: {ex.Message}";
-				SentrySdk.CaptureException(ex);
+				Sentry.SentrySdk.CaptureException(ex);
 			}
 		}
 
@@ -628,7 +643,8 @@ namespace EJRASync.UI {
 			await _hashStoreService.SaveToRemoteAsync(change.BucketName);
 		}
 
-		private async void Logout() {
+		[RelayCommand]
+		private async Task Logout() {
 			// Clear the saved token
 			await _authService.ClearSavedTokenAsync();
 
@@ -797,6 +813,55 @@ namespace EJRASync.UI {
 				}
 				_tempFilesForCleanup.Clear();
 			}
+		}
+
+		private async Task CheckForUpdatesAsync() {
+			try {
+				if (_autoUpdater != null) {
+					_availableUpdate = await _autoUpdater.CheckForUpdate();
+					await Application.Current.Dispatcher.InvokeAsync(() => {
+						IsUpdateAvailable = _availableUpdate != null;
+						UpdateAvailableCommand.NotifyCanExecuteChanged();
+					});
+				}
+			} catch {
+				// Silently fail - updates are not critical
+			}
+		}
+
+		[RelayCommand(CanExecute = nameof(CanUpdateAvailable))]
+		private async Task UpdateAvailable() {
+			if (_availableUpdate == null || _autoUpdater == null)
+				return;
+
+			try {
+				IsDownloadingUpdate = true;
+				UpdateAvailableCommand.NotifyCanExecuteChanged();
+
+				var success = await _autoUpdater.DownloadAndInstallUpdate(_availableUpdate);
+				if (!success) {
+					StatusMessage = "Update failed. Please try again later.";
+				}
+			} catch (Exception ex) {
+				StatusMessage = $"Update failed: {ex.Message}";
+			} finally {
+				IsDownloadingUpdate = false;
+				UpdateAvailableCommand.NotifyCanExecuteChanged();
+			}
+		}
+
+		private bool CanUpdateAvailable() => IsUpdateAvailable && !IsDownloadingUpdate;
+
+		private void LogMessage(string message) {
+			Application.Current.Dispatcher.InvokeAsync(() => {
+				StatusMessage = message;
+			});
+		}
+
+		private void UpdateProgress(int progress) {
+			Application.Current.Dispatcher.InvokeAsync(() => {
+				ProgressValue = progress;
+			});
 		}
 	}
 }

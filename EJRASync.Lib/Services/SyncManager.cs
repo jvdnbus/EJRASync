@@ -1,4 +1,5 @@
 using EJRASync.Lib.Models;
+using EJRASync.Lib.Utils;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -26,26 +27,27 @@ namespace EJRASync.Lib.Services {
 			_hashStoreService = hashStoreService;
 			_progressService = progressService;
 
-			var steamPath = SteamHelper.FindSteam();
+			var steamPath = PathUtils.NormalizePath(SteamHelper.FindSteam());
 			_progressService.ShowMessage($"Steam path: {steamPath}");
 
-			if (acPath == null)
-				acPath = SteamHelper.FindAssettoCorsa(steamPath);
-			else
+			if (acPath == null) {
+				acPath = PathUtils.NormalizePath(SteamHelper.FindAssettoCorsa(steamPath));
+			} else {
 				_progressService.ShowMessage($"Override Assetto Corsa path: {acPath}");
+			}
 
 			_progressService.ShowMessage($"Assetto Corsa path: {acPath}");
 
-			this._carsFolder = Path.Combine(acPath, "content", this._carsFolder);
+			this._carsFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._carsFolder));
 			_progressService.ShowMessage($"Cars folder: {this._carsFolder}");
 
-			this._tracksFolder = Path.Combine(acPath, "content", this._tracksFolder);
+			this._tracksFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._tracksFolder));
 			_progressService.ShowMessage($"Tracks folder: {this._tracksFolder}");
 
-			this._fontsFolder = Path.Combine(acPath, "content", this._fontsFolder);
+			this._fontsFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._fontsFolder));
 			_progressService.ShowMessage($"Fonts folder: {this._fontsFolder}");
 
-			this._appsFolder = Path.Combine(acPath, this._appsFolder);
+			this._appsFolder = PathUtils.NormalizePath(Path.Combine(acPath, this._appsFolder));
 			_progressService.ShowMessage($"Apps folder: {this._appsFolder}");
 		}
 
