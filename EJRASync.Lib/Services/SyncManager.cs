@@ -13,6 +13,7 @@ namespace EJRASync.Lib.Services {
 		private string _carsFolder = "cars";
 		private string _tracksFolder = "tracks";
 		private string _fontsFolder = "fonts";
+		private string _guiFolder = "gui";
 		private string _appsFolder = "apps";
 
 		public SyncManager(
@@ -46,6 +47,9 @@ namespace EJRASync.Lib.Services {
 
 			this._fontsFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._fontsFolder));
 			_progressService.ShowMessage($"Fonts folder: {this._fontsFolder}");
+
+			this._guiFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._guiFolder));
+			_progressService.ShowMessage($"Gui folder: {this._guiFolder}");
 
 			this._appsFolder = PathUtils.NormalizePath(Path.Combine(acPath, this._appsFolder));
 			_progressService.ShowMessage($"Apps folder: {this._appsFolder}");
@@ -185,6 +189,7 @@ namespace EJRASync.Lib.Services {
 				[Constants.CarsBucketName] = (_carsFolder, Constants.CarsYamlFile),
 				[Constants.TracksBucketName] = (_tracksFolder, Constants.TracksYamlFile),
 				[Constants.FontsBucketName] = (_fontsFolder, ""),
+				[Constants.GuiBucketName] = (_guiFolder, ""),
 				[Constants.AppsBucketName] = (_appsFolder, "")
 			};
 

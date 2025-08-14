@@ -263,13 +263,15 @@ namespace EJRASync.UI.ViewModels {
 			var normalizedRelativePath = relativePath.Replace('\\', '/');
 
 			if (normalizedRelativePath.StartsWith("content/cars", StringComparison.OrdinalIgnoreCase))
-				return EJRASync.Lib.Constants.CarsBucketName;
+				return Lib.Constants.CarsBucketName;
 			if (normalizedRelativePath.StartsWith("content/tracks", StringComparison.OrdinalIgnoreCase))
-				return EJRASync.Lib.Constants.TracksBucketName;
+				return Lib.Constants.TracksBucketName;
 			if (normalizedRelativePath.StartsWith("content/fonts", StringComparison.OrdinalIgnoreCase))
-				return EJRASync.Lib.Constants.FontsBucketName;
+				return Lib.Constants.FontsBucketName;
+			if (normalizedRelativePath.StartsWith("content/gui", StringComparison.OrdinalIgnoreCase))
+				return Lib.Constants.GuiBucketName;
 			if (normalizedRelativePath.StartsWith("apps", StringComparison.OrdinalIgnoreCase))
-				return EJRASync.Lib.Constants.AppsBucketName;
+				return Lib.Constants.AppsBucketName;
 
 			return null;
 		}

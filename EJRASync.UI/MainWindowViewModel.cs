@@ -109,8 +109,8 @@ namespace EJRASync.UI {
 			};
 
 			// Set up default Assetto Corsa path
-			var steamPath = EJRASync.Lib.SteamHelper.FindSteam();
-			var acPath = EJRASync.Lib.SteamHelper.FindAssettoCorsa(steamPath);
+			var steamPath = SteamHelper.FindSteam();
+			var acPath = SteamHelper.FindAssettoCorsa(steamPath);
 			NavigationContext.LocalBasePath = acPath;
 			NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(Path.Combine(acPath, "content"));
 
@@ -459,7 +459,8 @@ namespace EJRASync.UI {
 
 				// Check for dirty hash stores and add UpdateHashStore pending changes
 				var buckets = new[] { Constants.CarsBucketName, Constants.TracksBucketName,
-									  Constants.FontsBucketName, Constants.AppsBucketName };
+									  Constants.FontsBucketName, Constants.GuiBucketName,
+									  Constants.AppsBucketName };
 
 				foreach (var bucket in buckets) {
 					if (_hashStoreService.IsDirty(bucket)) {

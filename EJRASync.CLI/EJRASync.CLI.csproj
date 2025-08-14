@@ -17,6 +17,8 @@
     <Configurations>Debug;Release</Configurations>
   </PropertyGroup>
 
+  <Import Project="..\Version.props" />
+
   <ItemGroup>
     <Content Include="ejra-icon.ico" />
   </ItemGroup>

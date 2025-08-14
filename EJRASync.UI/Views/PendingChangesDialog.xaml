@@ -209,11 +209,20 @@
         </DataGrid>
         
         <!-- Footer -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="10">
-            <Button Content="Close" Click="CloseButton_Click" Padding="15,5" Background="#2D2D30" Foreground="#F0F0F0" BorderBrush="#3E3E42">
+        <Grid Grid.Row="2" Margin="10 0 10 10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Copy rows button on the left -->
+            <Button Grid.Column="0" Content="Copy rows" Click="CopyRowsButton_Click" 
+                    Padding="15,5" Background="#2D2D30" Foreground="#F0F0F0" BorderBrush="#3E3E42"
+                    HorizontalAlignment="Left">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="1"
                                 CornerRadius="4"
@@ -222,15 +231,39 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="Background" Value="#3E3E42"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter Property="Background" Value="#555"/>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Button.Template>
             </Button>
-        </StackPanel>
+            
+            <!-- Close button on the right -->
+            <Button Grid.Column="1" Content="Close" Click="CloseButton_Click" Padding="15,5" Background="#2D2D30" Foreground="#F0F0F0" BorderBrush="#3E3E42">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
     </Grid>
 </views:DarkThemeWindow>

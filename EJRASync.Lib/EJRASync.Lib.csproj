@@ -11,6 +11,18 @@
     <Configurations>Debug;Release</Configurations>
   </PropertyGroup>
 
+  <Import Project="..\Version.props" />
+
+  <Target Name="GenerateVersionClass" BeforeTargets="BeforeCompile">
+    <WriteLinesToFile
+      File="GeneratedVersion.cs"
+      Lines="namespace EJRASync.Lib { public static partial class Constants { public static readonly string Version = &quot;$(VersionPrefix)&quot;%3b } }"
+      Overwrite="true" />
+    <ItemGroup>
+      <Compile Include="GeneratedVersion.cs" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.6.4" />
     <PackageReference Include="Sentry" Version="5.14.0" />
