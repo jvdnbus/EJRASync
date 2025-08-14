@@ -48,15 +48,27 @@ namespace EJRASync.Lib.Services {
 								task.Value = download.CompletedBytes;
 
 								string description;
+								int padding = 80;
 								if (download.IsFailed) {
 									description = $"[red](x) Failed[/] [dim]{download.FileName}[/] - [red]{download.ErrorMessage}[/]";
+									padding += 24; // Spectre tags
 									task.Value = task.MaxValue; // Show as complete but failed
 								} else if (download.IsDecompressing) {
-									description = $"[yellow]Decompressing[/] [dim]{download.FileName}[/]";
+									var fileName = download.FileName;
+									if (fileName.Length > 50) {
+										fileName = "..." + fileName.Substring(fileName.Length - 47);
+									}
+									description = $"[yellow]Decompressing[/] [dim]{fileName}[/]";
+									padding += 19;
 								} else {
-									description = $"[blue]Downloading[/] [dim]{download.FileName}[/]";
+									var fileName = download.FileName;
+									if (fileName.Length > 50) {
+										fileName = "..." + fileName.Substring(fileName.Length - 47);
+									}
+									description = $"[blue]Downloading[/] [dim]{fileName}[/]";
+									padding += 17;
 								}
-								task.Description = description;
+								task.Description = description.PadRight(padding);
 							} else {
 								// Hide unused tasks
 								fileTasks[i].Description = "[dim]...[/]";
@@ -157,10 +169,10 @@ namespace EJRASync.Lib.Services {
 						var currentFile = p.ActiveDownloads.FirstOrDefault();
 						if (currentFile != null) {
 							if (currentFile.IsFailed) {
-								Console.WriteLine($"  (x) Failed: {currentFile.FileName} - {currentFile.ErrorMessage}");
+								// Console.WriteLine($"\n(x) Failed: {currentFile.FileName} - {currentFile.ErrorMessage}\n");
 							} else {
 								var status = currentFile.IsDecompressing ? "Decompressing" : "Downloading";
-								Console.WriteLine($"  {status}: {currentFile.FileName}");
+								Console.WriteLine($"{status}: {currentFile.FileName}");
 							}
 						}
 					}

@@ -14,6 +14,12 @@ namespace EJRASync.UI.Models {
 		[ObservableProperty]
 		private string _remoteCurrentPath = string.Empty;
 
-		public List<string> AvailableBuckets { get; set; } = new() { EJRASync.Lib.Constants.CarsBucketName, EJRASync.Lib.Constants.TracksBucketName, EJRASync.Lib.Constants.FontsBucketName, EJRASync.Lib.Constants.AppsBucketName };
+		public List<string> AvailableBuckets { get; set; } = new() {
+			Lib.Constants.CarsBucketName,
+			Lib.Constants.TracksBucketName,
+			Lib.Constants.FontsBucketName,
+			Lib.Constants.GuiBucketName,
+			Lib.Constants.AppsBucketName
+		};
 	}
 }

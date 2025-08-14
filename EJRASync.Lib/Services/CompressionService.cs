@@ -5,9 +5,10 @@ namespace EJRASync.Lib.Services {
 		private static readonly HashSet<string> CompressibleExtensions = new(StringComparer.OrdinalIgnoreCase)
 		{
 			".dds", ".png", ".jpg", ".jpeg", ".bmp", ".tga",
-			".ini", ".txt", ".cfg", ".json", ".xml", ".yaml", ".yml", ".lut", ".csv",
-			".fbx", ".obj", ".lua", ".ttf", ".bank", ".ai", ".bin", ".py",
-			".acd", ".knh", ".kn5", ".ksanim", ".vao-patch"
+			".ini", ".txt", ".cfg", ".json", ".xml", ".yaml", ".yml", ".lut", ".csv", ".2Dlut",
+			".fx", ".mp3", ".wav",  ".exe", ".dll",
+			".fbx", ".obj", ".lua", ".ttf", ".bank", ".ai", ".bin", ".py", ".pyc", ".pyd", ".ahk",
+			".acd", ".knh", ".kn5", ".ksanim", ".vao-patch", ".log"
 		};
 
 		private const long MinCompressionSize = 1024;

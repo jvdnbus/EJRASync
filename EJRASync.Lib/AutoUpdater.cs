@@ -5,26 +5,28 @@ using System.Text.Json;
 namespace EJRASync.Lib {
 	public class AutoUpdater {
 		private string _exePath;
+		private string? _acPath;
 		private Action<string> _logAction;
 		private Action<int>? _progressAction;
 
-		public AutoUpdater(string exePath, Action<string> logAction, Action<int>? progressAction = null) {
-			this._exePath = exePath;
-			this._logAction = logAction;
-			this._progressAction = progressAction;
+		public AutoUpdater(string exePath, Action<string> logAction, Action<int>? progressAction = null, string? acPath = null) {
+			_exePath = exePath;
+			_acPath = acPath;
+			_logAction = logAction;
+			_progressAction = progressAction;
 		}
 
 		public async Task ProcessUpdates() {
-			_logAction($"Running from {PathUtils.NormalizePath(this._exePath)}");
+			_logAction($"Running from {PathUtils.NormalizePath(_exePath)}");
 			_logAction("Checking for updates...");
 
-			var release = await this.UpdateAvailable(Constants.Version);
+			var release = await UpdateAvailable(Constants.Version);
 			if (release != null) {
-				this.RenameExecutable();
-				var result = await this.DownloadUpdate(release);
+				RenameExecutable();
+				var result = await DownloadUpdate(release);
 				if (result) {
 					_logAction("Update complete.");
-					this.RestartAndExit();
+					RestartAndExit();
 
 				} else {
 					_logAction("Update failed.");
@@ -39,14 +41,16 @@ namespace EJRASync.Lib {
 			// Parse the JSON
 			// Compare the version number
 
-			var release = await this.LatestRelease();
+			var release = await LatestRelease();
 
 			if (release == null) {
 				return null;
 			}
 
+			var fileName = Path.GetFileName(_exePath);
+
 			foreach (var asset in release.Assets) {
-				if (asset.Name.EndsWith(".exe")) {
+				if (asset.Name.EndsWith(fileName)) {
 					_logAction($"Found asset: {asset.Name}");
 					var latestVersion = new Version(release.TagName.TrimStart('v'));
 
@@ -81,21 +85,40 @@ namespace EJRASync.Lib {
 		}
 
 		private void RenameExecutable() {
-			File.Move(this._exePath, $"{this._exePath}.OLD");
+			string? dir = Path.GetDirectoryName(_exePath);
+			if (string.IsNullOrEmpty(dir)) {
+				dir = Directory.GetCurrentDirectory();
+			}
+			string newExt = ".exe.old";
+			string fileNameWithoutExt = Path.GetFileNameWithoutExtension(_exePath);
+			string candidate = Path.Combine(dir, fileNameWithoutExt + newExt);
+
+			if (!File.Exists(candidate)) {
+				File.Move(_exePath, candidate);
+				return;
+			}
+
+			int i = 1;
+			do {
+				candidate = Path.Combine(dir, $"{fileNameWithoutExt} ({i}){newExt}");
+				i++;
+			} while (File.Exists(candidate));
+
+			File.Move(_exePath, candidate);
 		}
 
 		public async Task<GitHubRelease?> CheckForUpdate() {
 			_logAction("Checking for updates...");
-			return await this.UpdateAvailable(Constants.Version);
+			return await UpdateAvailable(Constants.Version);
 		}
 
 		public async Task<bool> DownloadAndInstallUpdate(GitHubRelease release) {
 			try {
-				this.RenameExecutable();
-				var result = await this.DownloadUpdate(release);
+				RenameExecutable();
+				var result = await DownloadUpdate(release);
 				if (result) {
 					_logAction("Update complete.");
-					this.RestartAndExit();
+					RestartAndExit();
 					return true;
 				} else {
 					_logAction("Update failed.");
@@ -112,8 +135,10 @@ namespace EJRASync.Lib {
 			client.DefaultRequestHeaders.Add("User-Agent", Constants.UserAgent);
 
 			try {
+				var fileName = Path.GetFileName(_exePath);
+
 				foreach (var asset in release.Assets) {
-					if (asset.Name.EndsWith(".exe")) {
+					if (asset.Name.EndsWith(fileName)) {
 						_logAction($"Downloading {asset.Name}...");
 
 						var response = await client.GetAsync(asset.BrowserDownloadUrl, HttpCompletionOption.ResponseHeadersRead);
@@ -123,7 +148,7 @@ namespace EJRASync.Lib {
 						var downloadedBytes = 0L;
 
 						using var stream = await response.Content.ReadAsStreamAsync();
-						using var fileStream = new FileStream(this._exePath, FileMode.Create, FileAccess.Write, FileShare.None);
+						using var fileStream = new FileStream(_exePath, FileMode.Create, FileAccess.Write, FileShare.None);
 
 						var buffer = new byte[8192];
 						int bytesRead;
@@ -152,8 +177,9 @@ namespace EJRASync.Lib {
 		private void RestartAndExit() {
 			var newProcess = new Process {
 				StartInfo = new ProcessStartInfo {
-					FileName = this._exePath,
+					FileName = _exePath,
 					UseShellExecute = true,
+					Arguments = _acPath ?? ""
 				}
 			};
 

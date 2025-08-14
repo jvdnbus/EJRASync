@@ -249,7 +249,7 @@ namespace EJRASync.UI.ViewModels {
 				return;
 
 			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
-			if (bucketName != EJRASync.Lib.Constants.CarsBucketName && bucketName != EJRASync.Lib.Constants.TracksBucketName)
+			if (bucketName != Lib.Constants.CarsBucketName && bucketName != Lib.Constants.TracksBucketName)
 				return;
 
 			foreach (var item in filesToProcess) {
@@ -258,7 +258,7 @@ namespace EJRASync.UI.ViewModels {
 			}
 
 			// Add pending change to update YAML
-			var yamlFileName = bucketName == EJRASync.Lib.Constants.CarsBucketName ? EJRASync.Lib.Constants.CarsYamlFile : EJRASync.Lib.Constants.TracksYamlFile;
+			var yamlFileName = bucketName == Lib.Constants.CarsBucketName ? Lib.Constants.CarsYamlFile : Lib.Constants.TracksYamlFile;
 
 			var change = new PendingChange {
 				Type = ChangeType.UpdateYaml,
@@ -340,7 +340,7 @@ namespace EJRASync.UI.ViewModels {
 							existingFile.Status = GetStatusFromChangeType(firstChange.Type);
 						} else if (firstChange.Type == ChangeType.CompressAndUpload || firstChange.Type == ChangeType.RawUpload) {
 							// Determine if this should be a directory or file based on the change
-							var changeKey = firstChange.RemoteKey.Replace('\\', '/');
+							var changeKey = PathUtils.NormalizePath(firstChange.RemoteKey);
 							var isDirectory = string.IsNullOrEmpty(currentPath) && changeKey.Contains('/');
 
 							// Add new file/folder preview for uploads - these get "To be added" status
@@ -362,7 +362,7 @@ namespace EJRASync.UI.ViewModels {
 		}
 
 		private bool IsChangeRelevantToCurrentDirectory(PendingChange change, string currentPath) {
-			var changeKey = change.RemoteKey.Replace('\\', '/');
+			var changeKey = PathUtils.NormalizePath(change.RemoteKey);
 
 			// If we're at the bucket root (empty currentPath)
 			if (string.IsNullOrEmpty(currentPath)) {
@@ -371,12 +371,12 @@ namespace EJRASync.UI.ViewModels {
 			}
 
 			// For subdirectories, check if the change is directly in the current path
-			var changeDirectory = Path.GetDirectoryName(changeKey)?.Replace('\\', '/') ?? "";
+			var changeDirectory = PathUtils.NormalizePath(Path.GetDirectoryName(changeKey) ?? "");
 			return changeDirectory == currentPath;
 		}
 
 		private string GetFileNameFromChange(PendingChange change, string currentPath) {
-			var changeKey = change.RemoteKey.Replace('\\', '/');
+			var changeKey = PathUtils.NormalizePath(change.RemoteKey);
 
 			if (string.IsNullOrEmpty(currentPath)) {
 				// At bucket root - if the key has a path, return the first folder name
@@ -426,9 +426,7 @@ namespace EJRASync.UI.ViewModels {
 			var bucketName = _mainViewModel.NavigationContext.SelectedBucket;
 
 			foreach (var item in filesToProcess) {
-				var remoteKey = string.IsNullOrEmpty(_mainViewModel.NavigationContext.RemoteCurrentPath)
-					? item.Key
-					: $"{_mainViewModel.NavigationContext.RemoteCurrentPath}/{item.Key}";
+				var remoteKey = PathUtils.NormalizePath(item.Key);
 
 				var change = new PendingChange {
 					Type = ChangeType.DeleteRemote,

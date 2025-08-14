@@ -8,6 +8,8 @@ using System.Security.Principal;
 class CLI {
 	static async Task Main(string[] args) {
 		try {
+			// Read optional parameter from the command line, if present
+			string? acPath = args.Length > 0 ? args[0] : null;
 			var currentUser = GetCurrentUser();
 			Console.WriteLine($"Current user: {currentUser}");
 
@@ -22,6 +24,12 @@ class CLI {
 			SentrySdk.ConfigureScope(scope => {
 				scope.SetTag("username", currentUser);
 			});
+
+			var progressService = new SpectreProgressService();
+			progressService.ShowMessage($"Current version: {Constants.Version}");
+
+			var autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.CliExecutableName}", progressService.ShowMessage, acPath: acPath);
+			await autoUpdater.ProcessUpdates();
 
 			// Fetch AWS credentials before configuring S3 client
 			var authApi = new EjraAuthApiService();
@@ -50,10 +58,6 @@ class CLI {
 			};
 			var s3Client = new AmazonS3Client(awsAccessKeyId, awsSecretAccessKey, s3Config);
 
-			var progressService = new SpectreProgressService();
-			var autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.CliExecutableName}", progressService.ShowMessage);
-			await autoUpdater.ProcessUpdates();
-
 			var fileService = new FileService();
 			var compressionService = new CompressionService();
 
@@ -65,19 +69,12 @@ class CLI {
 
 			var downloadService = new DownloadService(s3Service, fileService, compressionService);
 
-			SyncManager syncManager;
-
-			// Read optional parameter from the command line, if present
-			if (args.Length > 0) {
-				var acPath = args[0];
-				AnsiConsole.MarkupLine($"[bold]Override AssettoCorsa Path:[/] {acPath}");
+			if (acPath != null) {
+				AnsiConsole.MarkupLine($"[bold] AssettoCorsa Path:[/] {acPath}");
 				SentrySdk.ConfigureScope(scope => scope.SetTag("ac.path", acPath));
-
-				syncManager = new SyncManager(downloadService, s3Service, hashStoreService, progressService, acPath);
-			} else {
-				syncManager = new SyncManager(downloadService, s3Service, hashStoreService, progressService);
 			}
 
+			SyncManager syncManager = new SyncManager(downloadService, s3Service, hashStoreService, progressService, acPath);
 			await syncManager.SyncAllAsync();
 
 			var rule = new Rule();
