@@ -1,0 +1,16 @@
+<linker>
+  <assembly fullname="System.Configuration" />
+  <assembly fullname="System.Configuration.ConfigurationManager" />
+  <assembly fullname="log4net" />
+  
+  <!-- Preserve log4net types that might be trimmed -->
+  <type fullname="log4net.Repository.Hierarchy.Hierarchy" />
+  <type fullname="System.Configuration.ClientConfigurationHost" />
+  <type fullname="System.Configuration.ConfigurationManager" />
+  <type fullname="System.Configuration.ClientConfigurationSystem" />
+  
+  <!-- Preserve all log4net appenders -->
+  <type fullname="log4net.Appender.*" />
+  <type fullname="log4net.Layout.*" />
+  <type fullname="log4net.Config.*" />
+</linker>

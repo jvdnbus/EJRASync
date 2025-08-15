@@ -1,49 +1,57 @@
 using log4net;
-using log4net.Appender;
-using log4net.Core;
-using log4net.Layout;
-using log4net.Repository.Hierarchy;
+using log4net.Config;
+using System.Reflection;
 
 namespace EJRASync.Lib {
 	public static class LoggingHelper {
 		private static bool _isConfigured = false;
 
+		static LoggingHelper() {
+			// Set these as early as possible to prevent log4net from accessing configuration system
+			Environment.SetEnvironmentVariable("log4net.Internal.Debug", "false");
+			Environment.SetEnvironmentVariable("log4net.DisableXmlLogging", "true");
+			Environment.SetEnvironmentVariable("log4net.Configuration.Watch", "false");
+		}
+
 		public static void ConfigureLogging(string appType = "CLI", int maxBackups = 10) {
 			if (_isConfigured) return;
+
+			// Completely disable log4net's configuration system access
+			Environment.SetEnvironmentVariable("log4net.Internal.Debug", "false");
+			Environment.SetEnvironmentVariable("log4net.DisableXmlLogging", "true");
+			Environment.SetEnvironmentVariable("log4net.Configuration.Watch", "false");
 
 			var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "EJRASync.Logs");
 			if (!Directory.Exists(logDir)) {
 				Directory.CreateDirectory(logDir);
 			}
 
-			var hierarchy = (Hierarchy)LogManager.GetRepository();
-
-			var patternLayout = new PatternLayout();
-			patternLayout.ConversionPattern = "%date{yyyy-MM-dd HH:mm:ss.fff} [%level] %message%newline";
-			patternLayout.ActivateOptions();
-
 			CleanupOldLogFiles(logDir, appType, maxBackups);
 
-			var roller = new RollingFileAppender();
-			roller.AppendToFile = false;
-			roller.File = Path.Combine(logDir, $"{appType}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log");
-			roller.Layout = patternLayout;
-			roller.CountDirection = 1;
-			roller.MaxSizeRollBackups = -1;
-			roller.MaximumFileSize = "10MB";
-			roller.RollingStyle = RollingFileAppender.RollingMode.Size;
-			roller.StaticLogFileName = false;
-			roller.ActivateOptions();
+			// Set properties for the log4net configuration
+			GlobalContext.Properties["AppType"] = appType;
+			GlobalContext.Properties["LogFileName"] = $"{appType}_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.log";
 
-			var consoleAppender = new ConsoleAppender();
-			consoleAppender.Layout = patternLayout;
-			consoleAppender.Threshold = Level.Info;
-			consoleAppender.ActivateOptions();
+			// Extract embedded config file to temp location
+			var assembly = Assembly.GetEntryAssembly() ?? Assembly.GetExecutingAssembly();
+			var resourceName = assembly.GetManifestResourceNames()
+				.FirstOrDefault(name => name.EndsWith("log4net.config"));
 
-			hierarchy.Root.AddAppender(roller);
-			hierarchy.Root.AddAppender(consoleAppender);
-			hierarchy.Root.Level = Level.Info;
-			hierarchy.Configured = true;
+			if (resourceName != null) {
+				var tempConfigPath = Path.Combine(Path.GetTempPath(), "EJRASync_log4net.config");
+				using (var resource = assembly.GetManifestResourceStream(resourceName))
+				using (var file = File.Create(tempConfigPath)) {
+					resource!.CopyTo(file);
+				}
+
+				XmlConfigurator.ConfigureAndWatch(
+					LogManager.GetRepository(assembly),
+					new FileInfo(tempConfigPath)
+				);
+			} else {
+				// Fallback to basic configuration if embedded resource not found
+				BasicConfigurator.Configure(LogManager.GetRepository(assembly));
+			}
 
 			_isConfigured = true;
 		}
@@ -57,21 +65,7 @@ namespace EJRASync.Lib {
 		}
 
 		public static ILog GetFileOnlyLogger(Type type) {
-			var logger = LogManager.GetLogger($"{type.FullName}.FileOnly");
-			var hierarchy = (Hierarchy)LogManager.GetRepository();
-
-			// Create a logger that only writes to file (no console)
-			var fileLogger = hierarchy.GetLogger($"{type.FullName}.FileOnly") as Logger;
-			if (fileLogger != null && fileLogger.Appenders.Count == 0) {
-				var fileAppender = hierarchy.Root.Appenders.OfType<RollingFileAppender>().FirstOrDefault();
-				if (fileAppender != null) {
-					fileLogger.AddAppender(fileAppender);
-					fileLogger.Level = Level.Info;
-					fileLogger.Additivity = false;
-				}
-			}
-
-			return logger;
+			return LogManager.GetLogger("FileOnly");
 		}
 
 		private static void CleanupOldLogFiles(string logDir, string appType, int maxFiles) {

@@ -7,16 +7,17 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 
 class CLI {
-	private static readonly ILog _logger = LoggingHelper.GetFileOnlyLogger(typeof(CLI));
+	private static ILog? _logger;
 
 	static async Task Main(string[] args) {
 		try {
 			LoggingHelper.ConfigureLogging("CLI", 10);
+			_logger = LoggingHelper.GetFileOnlyLogger(typeof(CLI));
 
 			// Read optional parameter from the command line if present
 			string? acPath = args.Length > 0 ? args[0] : null;
 			var currentUser = GetCurrentUser();
-			_logger.Info($"Current user: {currentUser}");
+			_logger?.Info($"Current user: {currentUser}");
 
 			SentrySdk.Init(options => {
 				options.Dsn = Constants.SentryDSN;
@@ -49,10 +50,10 @@ class CLI {
 				awsSecretAccessKey = tokens.UserRead.Aws.SecretAccessKey;
 				serviceUrl = tokens.UserRead.S3Url;
 				AnsiConsole.MarkupLine($"[green](✓)[/] Authenticated successfully");
-				_logger.Info("Authenticated successfully");
+				_logger?.Info("Authenticated successfully");
 			} else {
 				AnsiConsole.MarkupLine($"[yellow]/!\\[/] Using anonymous access");
-				_logger.Info("Using anonymous access");
+				_logger?.Info("Using anonymous access");
 			}
 
 			//AWSConfigs.LoggingConfig.LogResponses = ResponseLoggingOption.Always;
@@ -78,7 +79,7 @@ class CLI {
 
 			if (acPath != null) {
 				AnsiConsole.MarkupLine($"[bold] AssettoCorsa Path:[/] {acPath}");
-				_logger.Info($"AssettoCorsa Path: {acPath}");
+				_logger?.Info($"AssettoCorsa Path: {acPath}");
 				SentrySdk.ConfigureScope(scope => scope.SetTag("ac.path", acPath));
 			}
 
@@ -91,12 +92,12 @@ class CLI {
 			completeRule.LeftJustified();
 			AnsiConsole.Write(completeRule);
 			AnsiConsole.Write(rule);
-			_logger.Info("Sync complete!");
+			_logger?.Info("Sync complete!");
 
 			AnsiConsole.WriteLine("Press any key to exit...");
 			Console.ReadKey();
 		} catch (Exception ex) {
-			_logger.Error($"An unexpected error has occurred: {ex.Message}", ex);
+			_logger?.Error($"An unexpected error has occurred: {ex.Message}", ex);
 
 			Console.WriteLine("An unexpected error has occurred. Press any key to exit...");
 			Console.ReadKey();
