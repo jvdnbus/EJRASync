@@ -1,8 +1,10 @@
 using EJRASync.Lib.Models;
+using log4net;
 using System.Security.Cryptography;
 
 namespace EJRASync.Lib.Services {
 	public class FileService : IFileService {
+		private static readonly ILog _logger = LoggingHelper.GetLogger(typeof(FileService));
 		public async Task<List<LocalFile>> GetLocalFilesAsync(string directoryPath, bool recursive = false) {
 			var items = new List<LocalFile>();
 
@@ -41,7 +43,7 @@ namespace EJRASync.Lib.Services {
 							} catch (UnauthorizedAccessException) {
 								// Skip entries we can't access
 							} catch (Exception ex) {
-								Console.WriteLine($"Error processing entry {entry}: {ex.Message}");
+								_logger.Error($"Error processing entry {entry}: {ex.Message}");
 							}
 						}
 					} else {
@@ -61,7 +63,7 @@ namespace EJRASync.Lib.Services {
 							} catch (UnauthorizedAccessException) {
 								// Skip directories we can't access
 							} catch (Exception ex) {
-								Console.WriteLine($"Error processing directory {dir}: {ex.Message}");
+								_logger.Error($"Error processing directory {dir}: {ex.Message}");
 							}
 						}
 
@@ -81,14 +83,14 @@ namespace EJRASync.Lib.Services {
 							} catch (UnauthorizedAccessException) {
 								// Skip files we can't access
 							} catch (Exception ex) {
-								Console.WriteLine($"Error processing file {file}: {ex.Message}");
+								_logger.Error($"Error processing file {file}: {ex.Message}");
 							}
 						}
 					}
 				} catch (UnauthorizedAccessException) {
 					// Handle access denied to the root directory
 				} catch (Exception ex) {
-					Console.WriteLine($"Error listing files in {directoryPath}: {ex.Message}");
+					_logger.Error($"Error listing files in {directoryPath}: {ex.Message}");
 				}
 			});
 
@@ -159,7 +161,7 @@ namespace EJRASync.Lib.Services {
 					};
 				}
 			} catch (Exception ex) {
-				Console.WriteLine($"Error getting file info for {filePath}: {ex.Message}");
+				_logger.Error($"Error getting file info for {filePath}: {ex.Message}");
 			}
 
 			return null;

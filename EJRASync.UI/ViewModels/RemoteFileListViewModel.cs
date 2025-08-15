@@ -5,11 +5,13 @@ using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
+using log4net;
 using System.Collections.ObjectModel;
 using System.IO;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class RemoteFileListViewModel : ObservableObject {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(RemoteFileListViewModel));
 		private readonly IS3Service _s3Service;
 		private readonly IHashStoreService _hashStoreService;
 		private readonly IContentStatusService _contentStatusService;
@@ -142,7 +144,7 @@ namespace EJRASync.UI.ViewModels {
 					UpdatePendingChangesPreview(_mainViewModel.PendingChanges);
 				});
 			} catch (Exception ex) {
-				Console.WriteLine($"Error loading files from {bucketName}/{prefix}: {ex.Message}");
+				_logger.Error($"Error loading files from {bucketName}/{prefix}: {ex.Message}", ex);
 			} finally {
 				await this.InvokeUIAsync(() => {
 					IsLoading = false;
@@ -226,7 +228,7 @@ namespace EJRASync.UI.ViewModels {
 		}
 
 		[RelayCommand]
-		private async Task RefreshAsync() {
+		public async Task RefreshAsync() {
 			if (string.IsNullOrEmpty(_mainViewModel.NavigationContext.SelectedBucket)) {
 				// Refresh bucket list
 				await LoadBucketsAsync();

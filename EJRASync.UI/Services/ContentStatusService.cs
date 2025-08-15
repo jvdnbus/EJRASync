@@ -1,3 +1,4 @@
+using log4net;
 using System.IO;
 using System.Text;
 using YamlDotNet.Serialization;
@@ -5,6 +6,7 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace EJRASync.UI.Services {
 	public class ContentStatusService : IContentStatusService {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(ContentStatusService));
 		private readonly Lib.Services.IS3Service _s3Service;
 		private readonly Dictionary<string, HashSet<string>> _activeContent;
 		private readonly Dictionary<string, string> _bucketYamlFiles;
@@ -45,7 +47,7 @@ namespace EJRASync.UI.Services {
 				_activeContent[bucketName] = new HashSet<string>(activeList, StringComparer.OrdinalIgnoreCase);
 			} catch (Exception ex) {
 				// If YAML file doesn't exist or can't be loaded, start with empty set
-				Console.WriteLine($"Could not load {yamlFileName} from {bucketName}: {ex.Message}");
+				_logger.Error($"Could not load {yamlFileName} from {bucketName}: {ex.Message}", ex);
 				_activeContent[bucketName] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 			}
 		}

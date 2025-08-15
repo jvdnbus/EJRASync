@@ -1,9 +1,11 @@
 using EJRASync.Lib.Models;
 using EJRASync.Lib.Utils;
+using log4net;
 using System.Collections.Concurrent;
 
 namespace EJRASync.Lib.Services {
 	public class DownloadService : IDownloadService {
+		private static readonly ILog _fileOnlyLogger = LoggingHelper.GetFileOnlyLogger(typeof(DownloadService));
 		private readonly IS3Service _s3Service;
 		private readonly IFileService _fileService;
 		private readonly ICompressionService _compressionService;
@@ -64,6 +66,7 @@ namespace EJRASync.Lib.Services {
 
 			var activeDownloads = new ConcurrentDictionary<string, FileProgress>();
 			var failedDownloads = new ConcurrentBag<FileProgress>();
+			var successfulDownloads = new ConcurrentBag<string>();
 			var completedFiles = 0;
 			long completedBytes = 0;
 
@@ -83,6 +86,8 @@ namespace EJRASync.Lib.Services {
 					try {
 						await DownloadFileWithRetryAsync(file, bucketName, localBasePath, fileProgress, UpdateProgress);
 
+						successfulDownloads.Add(PathUtils.NormalizePath(Path.Combine(localBasePath, file.Key)));
+
 						// Mark as completed
 						Interlocked.Increment(ref completedFiles);
 						Interlocked.Add(ref completedBytes, file.SizeBytes);
@@ -93,11 +98,8 @@ namespace EJRASync.Lib.Services {
 							scope.SetTag("file", PathUtils.NormalizePath(file.Key));
 						});
 
-						// Mark file progress as failed
 						fileProgress.IsFailed = true;
 						fileProgress.ErrorMessage = ex.Message;
-
-						// Add to failed downloads collection
 						failedDownloads.Add(fileProgress);
 
 						// Continue with other files
@@ -121,6 +123,15 @@ namespace EJRASync.Lib.Services {
 			}
 
 			await Task.WhenAll(downloadTasks);
+
+			// Log summary of successful downloads
+			if (successfulDownloads.Count > 0) {
+				_fileOnlyLogger.Info($"=== DOWNLOAD SUMMARY ===");
+				foreach (var file in successfulDownloads) {
+					_fileOnlyLogger.Info(file);
+				}
+				_fileOnlyLogger.Info($"=== END DOWNLOAD SUMMARY ===");
+			}
 		}
 
 		private async Task DownloadFileWithRetryAsync(RemoteFile file, string bucketName, string localBasePath, FileProgress fileProgress, Action updateProgress) {

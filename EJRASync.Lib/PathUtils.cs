@@ -3,16 +3,24 @@ using System.Text.RegularExpressions;
 namespace EJRASync.Lib.Utils {
 	public static class PathUtils {
 		private static readonly Regex DuplicateForwardSlashRegex = new(@"/{2,}", RegexOptions.Compiled);
+		private static readonly Regex DuplicateBackwardSlashRegex = new(@"\\{2,}", RegexOptions.Compiled);
 
-		public static string NormalizePath(string path) {
+		public static string NormalizePath(string path, bool unixStyle = true) {
 			if (string.IsNullOrEmpty(path))
 				return path;
 
-			// Convert all backslashes to forward slashes first
-			var normalized = path.Replace('\\', '/');
+			var normalized = path;
+			if (unixStyle) {
+				// Convert all backslashes to forward slashes
+				normalized = normalized.Replace('\\', '/');
+			} else {
+				// Convert all forward slashes to backslashes
+				normalized = normalized.Replace('/', '\\');
+			}
 
-			// Then remove duplicate forward slashes
+			// Then remove duplicate forward slashes and duplicate backward slashes
 			normalized = DuplicateForwardSlashRegex.Replace(normalized, "/");
+			normalized = DuplicateBackwardSlashRegex.Replace(normalized, "\\");
 
 			return normalized;
 		}

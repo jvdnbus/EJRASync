@@ -1,4 +1,5 @@
-﻿using Microsoft.Win32;
+﻿using EJRASync.Lib.Utils;
+using Microsoft.Win32;
 
 namespace EJRASync.Lib {
 	public static class SteamHelper {
@@ -13,7 +14,7 @@ namespace EJRASync.Lib {
 				if (steamPath == null)
 					continue;
 
-				var libPath = Path.Combine((string)steamPath, Constants.SteamLibraryFile);
+				var libPath = PathUtils.NormalizePath(Path.Combine((string)steamPath, Constants.SteamLibraryFile), false);
 
 				if (!File.Exists(libPath))
 					continue;
@@ -43,7 +44,7 @@ namespace EJRASync.Lib {
 				if (!line.Contains('"' + Constants.AssettoCorsaAppId + '"'))
 					continue;
 
-				var acPath = Path.Combine(libraryPath, Constants.AssettoCorsaSubPath);
+				var acPath = PathUtils.NormalizePath(Path.Combine(libraryPath, Constants.AssettoCorsaSubPath), false);
 
 				if (!Directory.Exists(acPath))
 					continue;

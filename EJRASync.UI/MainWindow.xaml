@@ -8,7 +8,7 @@
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:lib="clr-namespace:EJRASync.Lib;assembly=EJRASync.Lib"
         mc:Ignorable="d"
-        Height="800" Width="1400" MinHeight="700" MinWidth="1000">
+        Height="800" Width="700" MinHeight="700" MinWidth="700">
     <views:DarkThemeWindow.Resources>
         <!-- Value converters for UI state -->
         <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
@@ -298,6 +298,14 @@
         <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1">
             <Grid Margin="20,12">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                    <Button Command="{Binding SyncCommand}" 
+                            Style="{StaticResource ModernButtonStyle}"
+                            Margin="0,0,12,0">
+                        <StackPanel Orientation="Horizontal">
+                            <Image Source="/Assets/Icons/download-pc.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Sync" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Command="{Binding ScanChangesCommand}" 
                             Style="{StaticResource ModernButtonStyle}"
                             Margin="0,0,12,0"
@@ -464,8 +472,30 @@
             <Grid Margin="20,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="12"/>
-                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="12">
+                        <ColumnDefinition.Style>
+                            <Style TargetType="ColumnDefinition">
+                                <Setter Property="Width" Value="12"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                        <Setter Property="Width" Value="0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ColumnDefinition.Style>
+                    </ColumnDefinition>
+                    <ColumnDefinition Width="*">
+                        <ColumnDefinition.Style>
+                            <Style TargetType="ColumnDefinition">
+                                <Setter Property="Width" Value="*"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                        <Setter Property="Width" Value="0"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ColumnDefinition.Style>
+                    </ColumnDefinition>
                 </Grid.ColumnDefinitions>
                 
                 <Grid.RowDefinitions>
@@ -476,22 +506,72 @@
                 
                 <!-- Labels -->
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Local Directory" 
-                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"/>
+                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Remote Storage" 
-                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"/>
+                           FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"
+                           Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 
                 <!-- Local Path Navigation -->
                 <Grid Grid.Row="2" Grid.Column="0">
+                    <Grid.Style>
+                        <Style TargetType="Grid">
+                            <Setter Property="Grid.ColumnSpan" Value="1"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                    <Setter Property="Grid.ColumnSpan" Value="3"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Grid.Style>
                     <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="8"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
-                    
-                    <!-- Local Up Directory Button -->
+
+                    <!-- Change AC Path Button -->
                     <Button Grid.Column="0" 
+                            Command="{Binding ChangeAcPathCommand}"
+                            Width="40" Height="40"
+                            Background="#2D2D30"
+                            BorderBrush="#3E3E42"
+                            BorderThickness="1"
+                            ToolTip="Change Assetto Corsa installation directory">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="ButtonBorder"
+                                        Background="{TemplateBinding Background}"
+                                        BorderBrush="{TemplateBinding BorderBrush}"
+                                        BorderThickness="{TemplateBinding BorderThickness}"
+                                        CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" 
+                                        VerticalAlignment="Center"/>
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
+                                    </Trigger>
+                                    <Trigger Property="IsEnabled" Value="False">
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                        <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="/Assets/Icons/folder.png" Width="20" Height="20"/>
+                    </Button>
+
+                    <!-- Local Up Directory Button -->
+                    <Button Grid.Column="2" 
                             Command="{Binding LocalFiles.NavigateUpCommand}"
                             Width="40" Height="40"
                             Background="#2D2D30"
@@ -500,7 +580,8 @@
                             ToolTip="Go up one directory">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}"
+                                <Border x:Name="ButtonBorder"
+                                        Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
                                         CornerRadius="4">
@@ -509,16 +590,16 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3E3E42"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Background" Value="#252526"/>
-                                        <Setter Property="BorderBrush" Value="#333"/>
-                                        <Setter Property="Opacity" Value="0.5"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                        <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -527,7 +608,7 @@
                     </Button>
                     
                     <!-- Local Refresh Button -->
-                    <Button Grid.Column="2" 
+                    <Button Grid.Column="4" 
                             Command="{Binding LocalFiles.RefreshCommand}"
                             Width="40" Height="40"
                             Background="#2D2D30"
@@ -536,7 +617,8 @@
                             ToolTip="Refresh directory">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}"
+                                <Border x:Name="ButtonBorder"
+                                        Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
                                         CornerRadius="4">
@@ -545,16 +627,16 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3E3E42"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Background" Value="#252526"/>
-                                        <Setter Property="BorderBrush" Value="#333"/>
-                                        <Setter Property="Opacity" Value="0.5"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                        <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -563,14 +645,14 @@
                     </Button>
                     
                     <!-- Local Path TextBox -->
-                    <TextBox Grid.Column="4" 
+                    <TextBox Grid.Column="6" 
                              Text="{Binding NavigationContext.LocalCurrentPath, Mode=OneWay}" 
                              IsReadOnly="True" 
                              Style="{StaticResource ModernTextBoxStyle}"/>
                 </Grid>
                 
                 <!-- Remote Path Navigation -->
-                <Grid Grid.Row="2" Grid.Column="2">
+                <Grid Grid.Row="2" Grid.Column="2" Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="8"/>
@@ -589,7 +671,8 @@
                             ToolTip="Go up one directory">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}"
+                                <Border x:Name="ButtonBorder"
+                                        Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
                                         CornerRadius="4">
@@ -598,16 +681,16 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3E3E42"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Background" Value="#252526"/>
-                                        <Setter Property="BorderBrush" Value="#333"/>
-                                        <Setter Property="Opacity" Value="0.5"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                        <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -625,7 +708,8 @@
                             ToolTip="Refresh directory">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
-                                <Border Background="{TemplateBinding Background}"
+                                <Border x:Name="ButtonBorder"
+                                        Background="{TemplateBinding Background}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}"
                                         CornerRadius="4">
@@ -634,16 +718,16 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="#3E3E42"/>
-                                        <Setter Property="BorderBrush" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#3E3E42"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
-                                        <Setter Property="Background" Value="#555"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#555"/>
                                     </Trigger>
                                     <Trigger Property="IsEnabled" Value="False">
-                                        <Setter Property="Background" Value="#252526"/>
-                                        <Setter Property="BorderBrush" Value="#333"/>
-                                        <Setter Property="Opacity" Value="0.5"/>
+                                        <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                        <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                        <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -661,15 +745,47 @@
         </Border>
 
         <!-- File Panes -->
-        <Grid Grid.Row="2" Margin="20,16,20,0">
+        <Grid Grid.Row="2" Margin="20,16,20,16">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="8"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="8">
+                    <ColumnDefinition.Style>
+                        <Style TargetType="ColumnDefinition">
+                            <Setter Property="Width" Value="8"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                    <Setter Property="Width" Value="0"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ColumnDefinition.Style>
+                </ColumnDefinition>
+                <ColumnDefinition Width="*">
+                    <ColumnDefinition.Style>
+                        <Style TargetType="ColumnDefinition">
+                            <Setter Property="Width" Value="*"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                    <Setter Property="Width" Value="0"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </ColumnDefinition.Style>
+                </ColumnDefinition>
             </Grid.ColumnDefinitions>
             
             <!-- Local File List -->
             <Border Grid.Column="0" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Grid.ColumnSpan" Value="1"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                <Setter Property="Grid.ColumnSpan" Value="3"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -828,7 +944,8 @@
             </Border>
 
             <!-- Remote File List -->
-            <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0">
+            <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0"
+                    Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
@@ -1027,7 +1144,9 @@
         </Grid>
 
         <!-- Action Buttons -->
-        <Border Grid.Row="3" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,1,0,0">
+        <Border Grid.Row="3" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" 
+                IsEnabled="{Binding HasWriteAccess}"
+                Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}">
             <StackPanel Orientation="Horizontal" 
                        HorizontalAlignment="Right" 
                        Margin="20,16">
@@ -1156,6 +1275,7 @@
                         <MultiBinding Converter="{StaticResource OrBooleanToVisibilityConverter}">
                             <Binding Path="IsScanning"/>
                             <Binding Path="IsApplying"/>
+                            <Binding Path="IsSyncing"/>
                         </MultiBinding>
                     </Button.Visibility>
                     <Image Source="/Assets/Icons/delete.png" Width="12" Height="12"/>

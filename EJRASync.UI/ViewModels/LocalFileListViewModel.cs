@@ -3,12 +3,14 @@ using CommunityToolkit.Mvvm.Input;
 using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Utils;
+using log4net;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 
 namespace EJRASync.UI.ViewModels {
 	public partial class LocalFileListViewModel : ObservableObject {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(LocalFileListViewModel));
 		private readonly Lib.Services.IFileService _fileService;
 		private readonly MainWindowViewModel _mainViewModel;
 
@@ -104,7 +106,7 @@ namespace EJRASync.UI.ViewModels {
 		}
 
 		[RelayCommand]
-		private async Task RefreshAsync() {
+		public async Task RefreshAsync() {
 			await LoadFilesAsync(_mainViewModel.NavigationContext.LocalCurrentPath);
 		}
 
@@ -250,7 +252,7 @@ namespace EJRASync.UI.ViewModels {
 						Process.Start("explorer.exe", $"/select,\"{windowsPath}\"");
 					}
 				} catch (Exception ex) {
-					Console.WriteLine($"Error opening explorer: {ex.Message}");
+					_logger.Error($"Error opening explorer: {ex.Message}", ex);
 				}
 			}
 		}
@@ -320,7 +322,7 @@ namespace EJRASync.UI.ViewModels {
 					}
 				} catch (Exception ex) {
 					// Log error but continue with other directories
-					Console.WriteLine($"Error processing directory {currentDirectory}: {ex.Message}");
+					_logger.Error($"Error processing directory {currentDirectory}: {ex.Message}", ex);
 				}
 			}
 

@@ -1,7 +1,10 @@
+using log4net;
 using Spectre.Console;
 
 namespace EJRASync.Lib.Services {
 	public class SpectreProgressService : IProgressService {
+		private static readonly ILog _logger = LoggingHelper.GetLogger(typeof(SpectreProgressService));
+		private static readonly ILog _fileOnlyLogger = LoggingHelper.GetFileOnlyLogger(typeof(SpectreProgressService));
 		private const int MaxIndividualProgressBars = 8;
 
 		public async Task RunWithProgressAsync(Func<IProgress<DownloadProgress>, Task> operation) {
@@ -150,11 +153,11 @@ namespace EJRASync.Lib.Services {
 					fileName = "..." + fileName.Substring(fileName.Length - 57);
 				}
 				var fileInfo = !string.IsNullOrEmpty(p.currentFile) ? $" - {fileName}" : "";
-				Console.WriteLine($"{description}: {percent:F1}% ({p.progress}/{total}){fileInfo}");
+				_logger.Info($"{description}: {percent:F1}% ({p.progress}/{total}){fileInfo}");
 			});
 
 			await operation(progress);
-			Console.WriteLine($"(✓) {description} Complete");
+			_logger.Info($"(✓) {description} Complete");
 		}
 
 		private async Task RunWithPercentageProgressAsync(Func<IProgress<DownloadProgress>, Task> operation) {
@@ -163,16 +166,16 @@ namespace EJRASync.Lib.Services {
 				finalProgress = p;
 				if (p.TotalFiles > 0) {
 					var percent = (double)p.CompletedFiles / p.TotalFiles * 100;
-					Console.WriteLine($"Progress: {percent:F1}% ({p.CompletedFiles}/{p.TotalFiles} files)");
+					_logger.Info($"Progress: {percent:F1}% ({p.CompletedFiles}/{p.TotalFiles} files)");
 
 					if (p.ActiveDownloads.Any()) {
 						var currentFile = p.ActiveDownloads.FirstOrDefault();
 						if (currentFile != null) {
 							if (currentFile.IsFailed) {
-								// Console.WriteLine($"\n(x) Failed: {currentFile.FileName} - {currentFile.ErrorMessage}\n");
+								_logger.Error($"Failed: {currentFile.FileName} - {currentFile.ErrorMessage}");
 							} else {
 								var status = currentFile.IsDecompressing ? "Decompressing" : "Downloading";
-								Console.WriteLine($"{status}: {currentFile.FileName}");
+								_logger.Info($"{status}: {currentFile.FileName}");
 							}
 						}
 					}
@@ -180,14 +183,13 @@ namespace EJRASync.Lib.Services {
 			});
 
 			await operation(progress);
-			Console.WriteLine("(✓) Download Complete");
+			_logger.Info("(✓) Download Complete");
 
 			// Show failed downloads after completion
 			if (finalProgress?.FailedDownloads.Any() == true) {
-				Console.WriteLine();
-				Console.WriteLine("Failed Downloads:");
+				_logger.Info("Failed Downloads:");
 				foreach (var failed in finalProgress.FailedDownloads) {
-					Console.WriteLine($"  (x) {failed.FileName} - {failed.ErrorMessage}");
+					_logger.Error($"  (x) {failed.FileName} - {failed.ErrorMessage}");
 				}
 			}
 		}
@@ -199,14 +201,17 @@ namespace EJRASync.Lib.Services {
 
 		public void ShowMessage(string message) {
 			AnsiConsole.MarkupLine($"[blue](i)[/] {message}");
+			_fileOnlyLogger.Info(message);
 		}
 
 		public void ShowError(string error) {
 			AnsiConsole.MarkupLine($"[red](x)[/] {error}");
+			_fileOnlyLogger.Error(error);
 		}
 
 		public void ShowSuccess(string message) {
 			AnsiConsole.MarkupLine($"[green](✓)[/] {message}");
+			_fileOnlyLogger.Info(message);
 		}
 	}
 }
