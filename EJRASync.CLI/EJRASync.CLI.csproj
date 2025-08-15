@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <PublishSingleFile>true</PublishSingleFile>
     <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
     <PackageIcon>ejra-icon.png</PackageIcon>
     <RepositoryUrl>https://github.com/jvdnbus/EJRASync</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
@@ -47,6 +48,19 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+    <EmbeddedResource Include="..\log4net.config">
+      <Link>log4net.config</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootAssembly Include="System.Configuration.ConfigurationManager" />
+    <TrimmerRootAssembly Include="log4net" />
+    <TrimmerRootAssembly Include="System.Configuration" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="trimmer.xml" />
   </ItemGroup>
 
 </Project>

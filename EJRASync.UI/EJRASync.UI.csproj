@@ -36,4 +36,10 @@
     <ProjectReference Include="..\EJRASync.Lib\EJRASync.Lib.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\log4net.config">
+      <Link>log4net.config</Link>
+    </EmbeddedResource>
+  </ItemGroup>
+
 </Project>
