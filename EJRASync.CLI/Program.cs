@@ -1,17 +1,22 @@
 ﻿using Amazon.S3;
 using EJRASync.Lib;
 using EJRASync.Lib.Services;
+using log4net;
 using Spectre.Console;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
 class CLI {
+	private static readonly ILog _logger = LoggingHelper.GetFileOnlyLogger(typeof(CLI));
+
 	static async Task Main(string[] args) {
 		try {
-			// Read optional parameter from the command line, if present
+			LoggingHelper.ConfigureLogging("CLI", 10);
+
+			// Read optional parameter from the command line if present
 			string? acPath = args.Length > 0 ? args[0] : null;
 			var currentUser = GetCurrentUser();
-			Console.WriteLine($"Current user: {currentUser}");
+			_logger.Info($"Current user: {currentUser}");
 
 			SentrySdk.Init(options => {
 				options.Dsn = Constants.SentryDSN;
@@ -44,8 +49,10 @@ class CLI {
 				awsSecretAccessKey = tokens.UserRead.Aws.SecretAccessKey;
 				serviceUrl = tokens.UserRead.S3Url;
 				AnsiConsole.MarkupLine($"[green](✓)[/] Authenticated successfully");
+				_logger.Info("Authenticated successfully");
 			} else {
 				AnsiConsole.MarkupLine($"[yellow]/!\\[/] Using anonymous access");
+				_logger.Info("Using anonymous access");
 			}
 
 			//AWSConfigs.LoggingConfig.LogResponses = ResponseLoggingOption.Always;
@@ -71,6 +78,7 @@ class CLI {
 
 			if (acPath != null) {
 				AnsiConsole.MarkupLine($"[bold] AssettoCorsa Path:[/] {acPath}");
+				_logger.Info($"AssettoCorsa Path: {acPath}");
 				SentrySdk.ConfigureScope(scope => scope.SetTag("ac.path", acPath));
 			}
 
@@ -83,18 +91,12 @@ class CLI {
 			completeRule.LeftJustified();
 			AnsiConsole.Write(completeRule);
 			AnsiConsole.Write(rule);
+			_logger.Info("Sync complete!");
+
 			AnsiConsole.WriteLine("Press any key to exit...");
 			Console.ReadKey();
 		} catch (Exception ex) {
-			Console.WriteLine();
-			AnsiConsole.MarkupLine("[red]An unexpected error has occurred:[/]");
-			Console.WriteLine($"Error: {ex.Message}");
-			Console.WriteLine($"Details: {ex}");
-			Console.WriteLine();
-
-			SentrySdk.CaptureException(ex, scope => {
-				scope.SetTag("location", "cli-main");
-			});
+			_logger.Error($"An unexpected error has occurred: {ex.Message}", ex);
 
 			Console.WriteLine("An unexpected error has occurred. Press any key to exit...");
 			Console.ReadKey();

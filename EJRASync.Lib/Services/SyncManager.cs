@@ -1,10 +1,13 @@
 using EJRASync.Lib.Models;
 using EJRASync.Lib.Utils;
+using log4net;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
 namespace EJRASync.Lib.Services {
 	public class SyncManager {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetFileOnlyLogger(typeof(SyncManager));
+
 		private readonly IDownloadService _downloadService;
 		private readonly IS3Service _s3Service;
 		private readonly IHashStoreService _hashStoreService;
@@ -34,10 +37,10 @@ namespace EJRASync.Lib.Services {
 			if (acPath == null) {
 				acPath = PathUtils.NormalizePath(SteamHelper.FindAssettoCorsa(steamPath));
 			} else {
-				_progressService.ShowMessage($"Override Assetto Corsa path: {acPath}");
+				_progressService.ShowMessage($"Overriden AC path");
 			}
 
-			_progressService.ShowMessage($"Assetto Corsa path: {acPath}");
+			_progressService.ShowMessage($"Assetto Corsa path: {PathUtils.NormalizePath(acPath)}");
 
 			this._carsFolder = PathUtils.NormalizePath(Path.Combine(acPath, "content", this._carsFolder));
 			_progressService.ShowMessage($"Cars folder: {this._carsFolder}");
@@ -103,7 +106,9 @@ namespace EJRASync.Lib.Services {
 
 			var filesToDownload = new List<RemoteFile>();
 
-			await _progressService.RunWithSimpleProgressAsync($"Checking {filesToConsider.Count} files for updates", filesToConsider.Count, async progress => {
+			var logDesc = $"Checking {filesToConsider.Count} files for updates in {bucketName}";
+			_logger.Info(logDesc);
+			await _progressService.RunWithSimpleProgressAsync(logDesc, filesToConsider.Count, async progress => {
 				var checkedFiles = 0;
 				foreach (var remoteFile in filesToConsider) {
 					checkedFiles++;

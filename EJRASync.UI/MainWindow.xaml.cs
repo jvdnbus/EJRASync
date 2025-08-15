@@ -2,6 +2,7 @@
 using EJRASync.UI.Models;
 using EJRASync.UI.Utils;
 using EJRASync.UI.Views;
+using log4net;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,7 @@ using System.Windows.Media.Imaging;
 
 namespace EJRASync.UI {
 	public partial class MainWindow : DarkThemeWindow {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(MainWindow));
 		// Constants
 		private const string ZeroByteFileSize = "0 B";
 		private static readonly string[] FileSizeSuffixes = { "B", "KB", "MB", "GB", "TB" };
@@ -72,6 +74,9 @@ namespace EJRASync.UI {
 			Title = $"EJRA Sync Manager {Lib.Constants.Version}";
 			Loaded += OnLoaded;
 
+			// Handle IsLoggedIn property changes to resize window
+			_viewModel.PropertyChanged += ViewModel_PropertyChanged;
+
 			// Wire up selection change events
 			LocalFilesDataGrid.SelectionChanged += LocalFilesDataGrid_SelectionChanged;
 			RemoteFilesDataGrid.SelectionChanged += RemoteFilesDataGrid_SelectionChanged;
@@ -120,6 +125,19 @@ namespace EJRASync.UI {
 					});
 				}
 			});
+		}
+
+		private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
+			if (e.PropertyName == nameof(MainWindowViewModel.IsLoggedIn)) {
+				Dispatcher.BeginInvoke(() => {
+					Width = _viewModel.IsLoggedIn ? 1400 : 700;
+					if (_viewModel.IsLoggedIn) {
+						MinWidth = 1400;
+					} else {
+						MinWidth = 700;
+					}
+				});
+			}
 		}
 
 		private void LocalFilesDataGrid_SelectionChanged(object sender, SelectionChangedEventArgs e) {
@@ -363,7 +381,7 @@ namespace EJRASync.UI {
 						downloadedCount++;
 						_viewModel.ProgressValue = (double)(i + 1) / totalFiles * 100;
 					} catch (Exception ex) {
-						System.Diagnostics.Debug.WriteLine($"Error downloading {file.Name}: {ex.Message}");
+						_logger.Debug($"Error downloading {file.Name}: {ex.Message}");
 					}
 				}
 

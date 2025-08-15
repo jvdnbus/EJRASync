@@ -2,6 +2,7 @@
 using EJRASync.Lib;
 using EJRASync.Lib.Services;
 using EJRASync.UI.Services;
+using log4net;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Security.Principal;
@@ -9,10 +10,14 @@ using System.Windows;
 
 namespace EJRASync.UI {
 	public partial class App : Application {
+		private static readonly ILog _logger = LoggingHelper.GetLogger(typeof(App));
 		private IHost? _host;
 
 		public App() {
+			LoggingHelper.ConfigureLogging("UI", 10);
+
 			var currentUser = WindowsIdentity.GetCurrent().Name;
+			_logger.Info($"Application starting for user: {currentUser}");
 
 			DispatcherUnhandledException += App_DispatcherUnhandledException;
 			Sentry.SentrySdk.Init(options => {
@@ -30,9 +35,13 @@ namespace EJRASync.UI {
 
 		private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e) {
 			Sentry.SentrySdk.CaptureException(e.Exception);
+			_logger.Error($"Unhandled exception in UI dispatcher: {e.Exception.Message}", e.Exception);
 		}
 
 		protected override async void OnStartup(StartupEventArgs e) {
+			// Parse command line arguments
+			string? acPathOverride = e.Args.Length > 0 ? e.Args[0] : null;
+
 			// Fetch AWS credentials before configuring services
 			var authApi = new EjraAuthApiService();
 			var tokens = await authApi.GetTokensAsync();
@@ -76,7 +85,17 @@ namespace EJRASync.UI {
 					services.AddSingleton<IContentStatusService, ContentStatusService>();
 
 					// Register ViewModels
-					services.AddTransient<MainWindowViewModel>();
+					services.AddTransient(provider => new MainWindowViewModel(
+						provider.GetRequiredService<IS3Service>(),
+						provider.GetRequiredService<IHashStoreService>(),
+						provider.GetRequiredService<IFileService>(),
+						provider.GetRequiredService<IContentStatusService>(),
+						provider.GetRequiredService<ICompressionService>(),
+						provider.GetRequiredService<IDownloadService>(),
+						provider.GetRequiredService<IEjraAuthApiService>(),
+						provider.GetRequiredService<IEjraAuthService>(),
+						acPathOverride
+					));
 
 					// Register Windows
 					services.AddTransient<MainWindow>();

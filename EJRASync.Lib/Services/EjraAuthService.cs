@@ -1,3 +1,4 @@
+using log4net;
 using System.Diagnostics;
 using System.Net;
 using System.Text;
@@ -5,6 +6,7 @@ using System.Text.Json;
 
 namespace EJRASync.Lib.Services {
 	public class EjraAuthService : IEjraAuthService {
+		private static readonly ILog _logger = LoggingHelper.GetLogger(typeof(EjraAuthService));
 		private readonly HttpClient _httpClient;
 		private readonly string _tokenFilePath;
 
@@ -78,7 +80,7 @@ namespace EJRASync.Lib.Services {
 					return tokenResponse;
 				} else {
 					var errorContent = await response.Content.ReadAsStringAsync();
-					Debug.WriteLine($"Token request failed: {response.StatusCode} - {errorContent}");
+					_logger.Debug($"Token request failed: {response.StatusCode} - {errorContent}");
 					return null;
 				}
 			} catch (Exception ex) {

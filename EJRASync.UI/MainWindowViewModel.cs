@@ -6,6 +6,7 @@ using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.ViewModels;
+using log4net;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -13,13 +14,17 @@ using System.Windows;
 
 namespace EJRASync.UI {
 	public partial class MainWindowViewModel : ObservableObject {
+		private static readonly ILog _logger = LoggingHelper.GetLogger(typeof(MainWindowViewModel));
 		private readonly IS3Service _s3Service;
 		private readonly IHashStoreService _hashStoreService;
 		private readonly IFileService _fileService;
 		private readonly IContentStatusService _contentStatusService;
 		private readonly ICompressionService _compressionService;
+		private readonly IDownloadService _downloadService;
 		private readonly IEjraAuthApiService _authApi;
 		private readonly IEjraAuthService _authService;
+		private readonly UIProgressService _uiProgressService;
+		private SyncManager _syncManager;
 
 		[ObservableProperty]
 		private ObservableCollection<PendingChange> _pendingChanges = new();
@@ -44,6 +49,9 @@ namespace EJRASync.UI {
 
 		[ObservableProperty]
 		private bool _isCancelling = false;
+
+		[ObservableProperty]
+		private bool _isSyncing = false;
 
 		[ObservableProperty]
 		private bool _hasWriteAccess = false;
@@ -81,15 +89,25 @@ namespace EJRASync.UI {
 			IFileService fileService,
 			IContentStatusService contentStatusService,
 			ICompressionService compressionService,
+			IDownloadService downloadService,
 			IEjraAuthApiService authApi,
-			IEjraAuthService authService) {
+			IEjraAuthService authService,
+			string? acPathOverride = null) {
 			_s3Service = s3Service;
 			_hashStoreService = hashStoreService;
 			_fileService = fileService;
 			_contentStatusService = contentStatusService;
 			_compressionService = compressionService;
+			_downloadService = downloadService;
 			_authApi = authApi;
 			_authService = authService;
+
+			_uiProgressService = new UIProgressService(
+				updateStatusMessage: (msg) => StatusMessage = msg,
+				updateProgress: (val) => ProgressValue = val,
+				setIndeterminate: (val) => IsProgressIndeterminate = val,
+				dispatcher: Application.Current.Dispatcher
+			);
 
 			LocalFiles = new LocalFileListViewModel(_fileService, this);
 			RemoteFiles = new RemoteFileListViewModel(_s3Service, _hashStoreService, _contentStatusService, this);
@@ -108,11 +126,17 @@ namespace EJRASync.UI {
 				}
 			};
 
-			// Set up default Assetto Corsa path
-			var steamPath = SteamHelper.FindSteam();
-			var acPath = SteamHelper.FindAssettoCorsa(steamPath);
+			// Set up Assetto Corsa path
+			string acPath;
+			if (!string.IsNullOrEmpty(acPathOverride) && Directory.Exists(acPathOverride)) {
+				acPath = acPathOverride;
+			} else {
+				var steamPath = SteamHelper.FindSteam();
+				acPath = SteamHelper.FindAssettoCorsa(steamPath);
+			}
 			NavigationContext.LocalBasePath = acPath;
 			NavigationContext.LocalCurrentPath = PathUtils.NormalizePath(Path.Combine(acPath, "content"));
+			_syncManager = new SyncManager(_downloadService, _s3Service, _hashStoreService, _uiProgressService, acPath);
 
 			// Initialize auto updater
 			_autoUpdater = new AutoUpdater(@$"{AppContext.BaseDirectory}\{Constants.GuiExecutableName}", LogMessage, UpdateProgress);
@@ -164,6 +188,42 @@ namespace EJRASync.UI {
 				HasWriteAccess = false;
 			}
 		}
+
+		[RelayCommand(CanExecute = nameof(CanSync))]
+		private async Task SyncAsync() {
+			IsSyncing = true;
+			StatusMessage = "Starting sync...";
+			ProgressValue = 0;
+			IsProgressIndeterminate = true;
+
+			_operationCancellationTokenSource = new CancellationTokenSource();
+
+			try {
+				await _syncManager.SyncAllAsync();
+
+				StatusMessage = "Sync completed successfully";
+				ProgressValue = 100;
+				IsProgressIndeterminate = false;
+
+				await LocalFiles.RefreshAsync();
+			} catch (OperationCanceledException) {
+				_logger.Info("Sync cancelled");
+				StatusMessage = "Sync cancelled";
+				ProgressValue = 0;
+				IsProgressIndeterminate = false;
+			} catch (Exception ex) {
+				_logger.Error($"Error during sync: {ex.Message}", ex);
+				StatusMessage = $"Sync failed: {ex.Message}";
+				ProgressValue = 0;
+				IsProgressIndeterminate = false;
+			} finally {
+				IsSyncing = false;
+				_operationCancellationTokenSource?.Dispose();
+				_operationCancellationTokenSource = null;
+			}
+		}
+
+		private bool CanSync() => !IsScanning && !IsApplying && !IsSyncing;
 
 		[RelayCommand(CanExecute = nameof(CanScanChanges))]
 		private async Task ScanChangesAsync() {
@@ -330,12 +390,12 @@ namespace EJRASync.UI {
 					}
 				} catch (Exception ex) {
 					// Log the error but continue processing other files
-					Console.WriteLine($"Error processing file {relativePath}: {ex.Message}");
 					Sentry.SentrySdk.CaptureException(ex, scope => {
 						scope.SetTag("operation", "file-scan");
 						scope.SetTag("bucket", bucketName);
 						scope.SetTag("file", relativePath);
 					});
+					_logger.Error($"Error processing file {relativePath}: {ex.Message}", ex);
 					continue;
 				}
 			}
@@ -445,7 +505,7 @@ namespace EJRASync.UI {
 					} catch (OperationCanceledException) {
 						// Cancel
 					} catch (Exception ex) {
-						Console.WriteLine($"Error processing {change.Description}: {ex.Message}");
+						_logger.Error($"Error processing {change.Description}: {ex.Message}", ex);
 					} finally {
 						// Remove from active changes and increment processed count
 						activeChanges.TryRemove(changeId, out _);
@@ -480,7 +540,7 @@ namespace EJRASync.UI {
 							await ProcessUpdateHashStoreAsync(change);
 							PendingChanges.Remove(change);
 						} catch (Exception ex) {
-							Console.WriteLine($"Error updating hash store for {change.BucketName}: {ex.Message}");
+							_logger.Error($"Error updating hash store for {change.BucketName}: {ex.Message}", ex);
 						}
 					}
 				}
@@ -503,7 +563,7 @@ namespace EJRASync.UI {
 						try {
 							await RemoteFiles.LoadFilesAsync(NavigationContext.SelectedBucket, NavigationContext.RemoteCurrentPath ?? "");
 						} catch (Exception ex) {
-							Console.WriteLine($"Error refreshing remote directory: {ex.Message}");
+							_logger.Error($"Error refreshing remote directory: {ex.Message}", ex);
 						}
 					});
 				}
@@ -625,7 +685,7 @@ namespace EJRASync.UI {
 			}
 		}
 
-		private bool CanCancelOperation() => (IsApplying || IsScanning) && !IsCancelling;
+		private bool CanCancelOperation() => (IsApplying || IsScanning || IsSyncing) && !IsCancelling;
 
 		[RelayCommand]
 		private async Task LoginAsync() {
@@ -653,6 +713,7 @@ namespace EJRASync.UI {
 			} catch (Exception ex) {
 				StatusMessage = $"Login failed: {ex.Message}";
 				Sentry.SentrySdk.CaptureException(ex);
+				_logger.Error($"Login failed: {ex.Message}", ex);
 			}
 		}
 
@@ -792,7 +853,7 @@ namespace EJRASync.UI {
 						try {
 							await RemoteFiles.LoadFilesAsync(NavigationContext.SelectedBucket, NavigationContext.RemoteCurrentPath ?? "");
 						} catch (Exception ex) {
-							Console.WriteLine($"Error refreshing remote directory after hash store rebuild: {ex.Message}");
+							_logger.Error($"Error refreshing remote directory after hash store rebuild: {ex.Message}", ex);
 						}
 					});
 				}
@@ -914,6 +975,46 @@ namespace EJRASync.UI {
 		}
 
 		private bool CanUpdateAvailable() => IsUpdateAvailable && !IsDownloadingUpdate;
+
+		[RelayCommand]
+		private void ChangeAcPath() {
+			try {
+				var dialog = new Microsoft.Win32.OpenFolderDialog {
+					Title = "Select Assetto Corsa Directory"
+				};
+
+				if (!string.IsNullOrEmpty(NavigationContext.LocalBasePath) && Directory.Exists(NavigationContext.LocalBasePath)) {
+					dialog.InitialDirectory = NavigationContext.LocalBasePath;
+				}
+
+				if (dialog.ShowDialog() == true) {
+					var selectedPath = dialog.FolderName;
+					if (Directory.Exists(selectedPath)) {
+						// Update the navigation context
+						NavigationContext.LocalBasePath = selectedPath;
+						NavigationContext.LocalCurrentPath = selectedPath;
+						_syncManager = new SyncManager(_downloadService, _s3Service, _hashStoreService, _uiProgressService, selectedPath);
+
+						// Reload the local files with the new path
+						_ = Task.Run(async () => {
+							try {
+								await LocalFiles.LoadFilesAsync(NavigationContext.LocalCurrentPath);
+							} catch (Exception ex) {
+								await Application.Current.Dispatcher.InvokeAsync(() => {
+									StatusMessage = $"Error loading files from new path: {ex.Message}";
+								});
+							}
+						});
+
+						StatusMessage = $"AC path changed to: {selectedPath}";
+						_logger.Info($"AC path changed to: {selectedPath}");
+					}
+				}
+			} catch (Exception ex) {
+				StatusMessage = $"Error opening folder dialog: {ex.Message}";
+				_logger.Error($"Error in ChangeAcPath: {ex.Message}", ex);
+			}
+		}
 
 		private void LogMessage(string message) {
 			Application.Current.Dispatcher.InvokeAsync(() => {

@@ -1,10 +1,12 @@
 using EJRASync.UI.Models;
+using log4net;
 using System.Collections.ObjectModel;
 using System.Text;
 using System.Windows;
 
 namespace EJRASync.UI.Views {
 	public partial class PendingChangesDialog : DarkThemeWindow {
+		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(PendingChangesDialog));
 		public ObservableCollection<PendingChange> PendingChanges { get; set; }
 
 		public PendingChangesDialog(ObservableCollection<PendingChange> pendingChanges) {
@@ -27,25 +29,26 @@ namespace EJRASync.UI.Views {
 				Clipboard.SetText(csv);
 			} catch (Exception ex) {
 				Sentry.SentrySdk.CaptureException(ex);
+				_logger.Error($"Exception captured: {ex.Message}", ex);
 			}
 		}
 
 		private string GenerateCsvFromPendingChanges() {
 			var csv = new StringBuilder();
-			
+
 			// Add header row
 			csv.AppendLine("Type,Description,Bucket,Size");
-			
+
 			// Add data rows
 			foreach (var change in PendingChanges) {
 				var type = EscapeCsvField(change.Type.ToString());
 				var description = EscapeCsvField(change.Description);
 				var bucket = EscapeCsvField(change.BucketName);
 				var size = change.FileSizeBytes?.ToString() ?? "";
-				
+
 				csv.AppendLine($"{type},{description},{bucket},{size}");
 			}
-			
+
 			return csv.ToString();
 		}
 
@@ -53,12 +56,12 @@ namespace EJRASync.UI.Views {
 			if (string.IsNullOrEmpty(field)) {
 				return "";
 			}
-			
+
 			// If field contains comma, newline, or quote, wrap in quotes and escape internal quotes
 			if (field.Contains(",") || field.Contains("\n") || field.Contains("\"")) {
 				return "\"" + field.Replace("\"", "\"\"") + "\"";
 			}
-			
+
 			return field;
 		}
 	}
