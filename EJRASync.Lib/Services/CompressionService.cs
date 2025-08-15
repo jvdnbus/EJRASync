@@ -54,7 +54,7 @@ namespace EJRASync.Lib.Services {
 
 				using var inputStream = File.OpenRead(inputFilePath);
 				using var outputStream = File.OpenWrite(outputFilePath);
-				using var decompressionStream = new DecompressionStream(inputStream);
+				using var decompressionStream = new DecompressionStream(inputStream, leaveOpen: false);
 
 				decompressionStream.CopyTo(outputStream);
 				progress?.Report(100);

@@ -161,6 +161,11 @@ namespace EJRASync.Lib.Services {
 							fileProgress.IsDecompressing = true;
 							updateProgress();
 
+							// Delete existing file
+							if (File.Exists(localPath)) {
+								File.Delete(localPath);
+							}
+
 							await _compressionService.DecompressFileAsync(tempFilePath, localPath);
 
 							// Validate decompressed file hash
@@ -198,6 +203,7 @@ namespace EJRASync.Lib.Services {
 			}
 
 			// If we get here, all retries failed
+			_fileOnlyLogger.Error($"Failed to download {localPath}", lastException);
 			throw new Exception($"Failed to download {file.Name} after {MaxRetries + 1} attempts", lastException);
 		}
 
