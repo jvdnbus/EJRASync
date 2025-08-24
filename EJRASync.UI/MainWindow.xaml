@@ -381,13 +381,12 @@
                             <TextBlock Text="Rebuild .zstd" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
-                    <Button IsEnabled="False" 
-                            Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    <Button Command="{Binding OpenReleaseCommand}"
                             Style="{StaticResource ModernButtonStyle}"
                             Margin="0,0,12,0">
                         <StackPanel Orientation="Horizontal">
-                            <Image Source="/Assets/Icons/github.png" Width="16" Height="16" Margin="0,0,8,0"/>
-                            <TextBlock Text="Release" VerticalAlignment="Center"/>
+                            <Image Source="/Assets/Icons/archive.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Text="Archive" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Button>
                     <!-- User Profile / Login -->
@@ -477,7 +476,7 @@
                             <Style TargetType="ColumnDefinition">
                                 <Setter Property="Width" Value="12"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                    <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                         <Setter Property="Width" Value="0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -489,7 +488,7 @@
                             <Style TargetType="ColumnDefinition">
                                 <Setter Property="Width" Value="*"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                    <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                         <Setter Property="Width" Value="0"/>
                                     </DataTrigger>
                                 </Style.Triggers>
@@ -509,7 +508,7 @@
                            FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0" />
                 <TextBlock Grid.Row="0" Grid.Column="2" Text="Remote Storage" 
                            FontWeight="SemiBold" FontSize="13" Foreground="#CCCCCC" Margin="4,0"
-                           Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                           Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 
                 <!-- Local Path Navigation -->
                 <Grid Grid.Row="2" Grid.Column="0">
@@ -517,7 +516,7 @@
                         <Style TargetType="Grid">
                             <Setter Property="Grid.ColumnSpan" Value="1"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                     <Setter Property="Grid.ColumnSpan" Value="3"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -652,7 +651,7 @@
                 </Grid>
                 
                 <!-- Remote Path Navigation -->
-                <Grid Grid.Row="2" Grid.Column="2" Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <Grid Grid.Row="2" Grid.Column="2" Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="8"/>
@@ -753,7 +752,7 @@
                         <Style TargetType="ColumnDefinition">
                             <Setter Property="Width" Value="8"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                     <Setter Property="Width" Value="0"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -765,7 +764,7 @@
                         <Style TargetType="ColumnDefinition">
                             <Setter Property="Width" Value="*"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                                <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                     <Setter Property="Width" Value="0"/>
                                 </DataTrigger>
                             </Style.Triggers>
@@ -780,7 +779,7 @@
                     <Style TargetType="Border">
                         <Setter Property="Grid.ColumnSpan" Value="1"/>
                         <Style.Triggers>
-                            <DataTrigger Binding="{Binding IsLoggedIn}" Value="False">
+                            <DataTrigger Binding="{Binding HasWriteAccess}" Value="False">
                                 <Setter Property="Grid.ColumnSpan" Value="3"/>
                             </DataTrigger>
                         </Style.Triggers>
@@ -945,7 +944,7 @@
 
             <!-- Remote File List -->
             <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0"
-                    Visibility="{Binding IsLoggedIn, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>

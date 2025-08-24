@@ -1,4 +1,5 @@
 ﻿using EJRASync.Lib.Services;
+using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Utils;
 using EJRASync.UI.Views;
@@ -128,10 +129,10 @@ namespace EJRASync.UI {
 		}
 
 		private void ViewModel_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) {
-			if (e.PropertyName == nameof(MainWindowViewModel.IsLoggedIn)) {
+			if (e.PropertyName == nameof(MainWindowViewModel.HasWriteAccess)) {
 				Dispatcher.BeginInvoke(() => {
-					Width = _viewModel.IsLoggedIn ? 1400 : 700;
-					if (_viewModel.IsLoggedIn) {
+					Width = _viewModel.HasWriteAccess ? 1400 : 700;
+					if (_viewModel.HasWriteAccess) {
 						MinWidth = 1400;
 					} else {
 						MinWidth = 700;
@@ -442,7 +443,7 @@ namespace EJRASync.UI {
 							SizeBytes = fileInfo.Length,
 							LastModified = fileInfo.LastWriteTime,
 							IsDirectory = false,
-							DisplaySize = FormatFileSize(fileInfo.Length)
+							DisplaySize = FileSizeFormatter.FormatFileSize(fileInfo.Length)
 						});
 					} else if (Directory.Exists(filePath)) {
 						var dirInfo = new DirectoryInfo(filePath);
@@ -479,20 +480,6 @@ namespace EJRASync.UI {
 			}
 		}
 
-		private string FormatFileSize(long bytes) {
-			if (bytes == 0) return ZeroByteFileSize;
-
-			var suffixes = FileSizeSuffixes;
-			int suffixIndex = 0;
-			double size = bytes;
-
-			while (size >= 1024 && suffixIndex < suffixes.Length - 1) {
-				size /= 1024;
-				suffixIndex++;
-			}
-
-			return $"{size:F1} {suffixes[suffixIndex]}";
-		}
 
 		// Helper method to find ancestor of specific type in visual tree
 		private void RemoteFilesDataGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) {

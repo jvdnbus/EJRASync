@@ -21,7 +21,7 @@ namespace EJRASync.UI {
 		private readonly IContentStatusService _contentStatusService;
 		private readonly ICompressionService _compressionService;
 		private readonly IDownloadService _downloadService;
-		private readonly IEjraAuthApiService _authApi;
+		private readonly IEjraApiService _authApi;
 		private readonly IEjraAuthService _authService;
 		private readonly UIProgressService _uiProgressService;
 		private SyncManager _syncManager;
@@ -90,7 +90,7 @@ namespace EJRASync.UI {
 			IContentStatusService contentStatusService,
 			ICompressionService compressionService,
 			IDownloadService downloadService,
-			IEjraAuthApiService authApi,
+			IEjraApiService authApi,
 			IEjraAuthService authService,
 			string? acPathOverride = null) {
 			_s3Service = s3Service;
@@ -225,6 +225,10 @@ namespace EJRASync.UI {
 
 		private bool CanSync() => !IsScanning && !IsApplying && !IsSyncing;
 
+		partial void OnIsSyncingChanged(bool value) {
+			OpenReleaseCommand.NotifyCanExecuteChanged();
+		}
+
 		[RelayCommand(CanExecute = nameof(CanScanChanges))]
 		private async Task ScanChangesAsync() {
 			IsScanning = true;
@@ -251,12 +255,13 @@ namespace EJRASync.UI {
 
 					var bucket = buckets[i].Item1;
 					var localFolder = buckets[i].Item2;
-					var localPath = Path.Combine(NavigationContext.LocalBasePath, localFolder);
+					foreach (var subRoot in buckets[i].Item3) {
+						var localPath = Path.Combine(NavigationContext.LocalBasePath, localFolder, subRoot);
 
-					if (Directory.Exists(localPath)) {
-						await ScanBucketChangesAsync(bucket, localPath, _operationCancellationTokenSource.Token);
+						if (Directory.Exists(localPath)) {
+							await ScanBucketChangesAsync(bucket, localPath, _operationCancellationTokenSource.Token);
+						}
 					}
-
 					if (!IsCancelling) {
 						ProgressValue = (i + 1) * 100.0 / buckets.Length;
 					}
@@ -815,15 +820,18 @@ namespace EJRASync.UI {
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
 			RebuildHashStoreCommand.NotifyCanExecuteChanged();
+			OpenReleaseCommand.NotifyCanExecuteChanged();
 		}
 
 		partial void OnIsApplyingChanged(bool value) {
 			RebuildHashStoreCommand.NotifyCanExecuteChanged();
+			OpenReleaseCommand.NotifyCanExecuteChanged();
 		}
 
 		partial void OnIsScanningChanged(bool value) {
 			DiscardChangesCommand.NotifyCanExecuteChanged();
 			ApplyChangesCommand.NotifyCanExecuteChanged();
+			OpenReleaseCommand.NotifyCanExecuteChanged();
 		}
 
 		private void UpdatePendingChangesDialogTitle() {
@@ -836,6 +844,18 @@ namespace EJRASync.UI {
 		private async Task RebuildHashStore() {
 			if (string.IsNullOrEmpty(NavigationContext.SelectedBucket)) {
 				StatusMessage = "No bucket selected for hash store rebuild";
+				return;
+			}
+
+			// Show confirmation dialog
+			var result = MessageBox.Show(
+				$"Are you sure you want to rebuild the .zstd hash store for '{NavigationContext.SelectedBucket}'?\n\nThis operation will recreate the hash store from scratch and may take some time.",
+				"Confirm Rebuild",
+				MessageBoxButton.YesNo,
+				MessageBoxImage.Question,
+				MessageBoxResult.No);
+
+			if (result != MessageBoxResult.Yes) {
 				return;
 			}
 
@@ -975,6 +995,36 @@ namespace EJRASync.UI {
 		}
 
 		private bool CanUpdateAvailable() => IsUpdateAvailable && !IsDownloadingUpdate;
+
+		[RelayCommand(CanExecute = nameof(CanOpenRelease))]
+		private async Task OpenRelease() {
+			try {
+				var releaseViewModel = new ViewModels.ArchiveDialogViewModel(_s3Service, _fileService, _authApi, _downloadService, _currentOAuthToken);
+				var dialog = new Views.ArchiveDialog(releaseViewModel);
+				dialog.Owner = Application.Current.MainWindow;
+
+				// Show the dialog first, then initialize in the background
+				dialog.Show();
+
+				// Initialize the dialog asynchronously
+				_ = Task.Run(async () => {
+					try {
+						await releaseViewModel.InitializeAsync();
+					} catch (Exception ex) {
+						await Application.Current.Dispatcher.InvokeAsync(() => {
+							releaseViewModel.StatusMessage = $"Error loading content: {ex.Message}";
+							_logger.Error($"Error initializing release dialog: {ex.Message}", ex);
+						});
+					}
+				});
+
+			} catch (Exception ex) {
+				StatusMessage = $"Error opening release dialog: {ex.Message}";
+				_logger.Error($"Error opening release dialog: {ex.Message}", ex);
+			}
+		}
+
+		private bool CanOpenRelease() => HasWriteAccess && !IsScanning && !IsApplying && !IsSyncing;
 
 		[RelayCommand]
 		private void ChangeAcPath() {

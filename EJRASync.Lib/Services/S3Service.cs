@@ -1,6 +1,7 @@
 using Amazon.S3;
 using Amazon.S3.Model;
 using EJRASync.Lib.Models;
+using EJRASync.Lib.Utils;
 using System.Collections.Concurrent;
 using System.Net;
 
@@ -135,7 +136,7 @@ namespace EJRASync.Lib.Services {
 						items.Add(new RemoteFile {
 							Name = name,
 							Key = obj.Key,
-							DisplaySize = FormatFileSize(obj.Size ?? 0),
+							DisplaySize = FileSizeFormatter.FormatFileSize(obj.Size ?? 0),
 							LastModified = obj.LastModified ?? DateTime.MinValue,
 							SizeBytes = obj.Size ?? 0,
 							IsDirectory = false,
@@ -170,7 +171,7 @@ namespace EJRASync.Lib.Services {
 				return new RemoteFile {
 					Name = name,
 					Key = key,
-					DisplaySize = FormatFileSize(response.ContentLength),
+					DisplaySize = FileSizeFormatter.FormatFileSize(response.ContentLength),
 					LastModified = response.LastModified ?? DateTime.MinValue,
 					SizeBytes = response.ContentLength,
 					IsDirectory = false,
@@ -201,9 +202,9 @@ namespace EJRASync.Lib.Services {
 			}
 		}
 
-		public async Task UploadFileAsync(string bucketName, string key, string localFilePath, Dictionary<string, string>? metadata = null, IProgress<long>? progress = null) {
+		public async Task UploadFileAsync(string bucketName, string key, string localFilePath, Dictionary<string, string>? metadata = null, IProgress<long>? progress = null, CancellationToken cancellationToken = default) {
 			try {
-				await UploadFileInternalAsync(bucketName, key, localFilePath, metadata, progress);
+				await UploadFileInternalAsync(bucketName, key, localFilePath, metadata, progress, cancellationToken);
 			} catch (Exception ex) {
 				if (ShouldRetry(ex)) {
 					var retryItem = new UploadRetryItem {
@@ -225,7 +226,7 @@ namespace EJRASync.Lib.Services {
 			}
 		}
 
-		private async Task UploadFileInternalAsync(string bucketName, string key, string localFilePath, Dictionary<string, string>? metadata = null, IProgress<long>? progress = null) {
+		private async Task UploadFileInternalAsync(string bucketName, string key, string localFilePath, Dictionary<string, string>? metadata = null, IProgress<long>? progress = null, CancellationToken cancellationToken = default) {
 			var request = new PutObjectRequest {
 				BucketName = bucketName,
 				Key = key,
@@ -250,12 +251,12 @@ namespace EJRASync.Lib.Services {
 				request.StreamTransferProgress += (sender, args) => progress.Report(args.TransferredBytes);
 			}
 
-			await _s3Client.PutObjectAsync(request);
+			await _s3Client.PutObjectAsync(request, cancellationToken);
 		}
 
-		public async Task UploadDataAsync(string bucketName, string key, byte[] data, Dictionary<string, string>? metadata = null) {
+		public async Task UploadDataAsync(string bucketName, string key, byte[] data, Dictionary<string, string>? metadata = null, CancellationToken cancellationToken = default) {
 			try {
-				await UploadDataInternalAsync(bucketName, key, data, metadata);
+				await UploadDataInternalAsync(bucketName, key, data, metadata, cancellationToken);
 			} catch (Exception ex) {
 				if (ShouldRetry(ex)) {
 					var retryItem = new UploadRetryItem {
@@ -277,15 +278,15 @@ namespace EJRASync.Lib.Services {
 			}
 		}
 
-		private async Task UploadDataInternalAsync(string bucketName, string key, byte[] data, Dictionary<string, string>? metadata = null) {
+		private async Task UploadDataInternalAsync(string bucketName, string key, byte[] data, Dictionary<string, string>? metadata = null, CancellationToken cancellationToken = default) {
 			using var stream = new MemoryStream(data);
 			var request = new PutObjectRequest {
 				BucketName = bucketName,
 				Key = key,
 				InputStream = stream,
 				ContentType = GetContentType(key),
-				DisablePayloadSigning = true,
-				DisableDefaultChecksumValidation = true
+				DisableDefaultChecksumValidation = true,
+				DisablePayloadSigning = true
 			};
 
 			if (metadata != null) {
@@ -299,7 +300,7 @@ namespace EJRASync.Lib.Services {
 				}
 			}
 
-			await _s3Client.PutObjectAsync(request);
+			await _s3Client.PutObjectAsync(request, cancellationToken);
 		}
 
 		public async Task DeleteObjectAsync(string bucketName, string key) {
@@ -400,21 +401,6 @@ namespace EJRASync.Lib.Services {
 			}
 		}
 
-		private string FormatFileSize(long bytes) {
-			if (bytes == 0) return "0 B";
-
-			string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-			int suffixIndex = 0;
-			double size = bytes;
-
-			while (size >= 1024 && suffixIndex < suffixes.Length - 1) {
-				size /= 1024;
-				suffixIndex++;
-			}
-
-			return $"{size:F1} {suffixes[suffixIndex]}";
-		}
-
 		private string GetContentType(string fileName) {
 			var extension = Path.GetExtension(fileName).ToLowerInvariant();
 			return extension switch {
@@ -426,6 +412,7 @@ namespace EJRASync.Lib.Services {
 				".txt" => "text/plain",
 				".yaml" or ".yml" => "text/yaml",
 				".json" => "application/json",
+				".zip" => "application/zip",
 				_ => "application/octet-stream"
 			};
 		}
@@ -445,6 +432,89 @@ namespace EJRASync.Lib.Services {
 		}
 
 		public int GetRetryQueueCount() => _retryQueue.Count;
+
+
+		public async Task UploadLargeFileAsync(string bucketName, string key, string localFilePath, IProgress<long>? progress = null, CancellationToken cancellationToken = default) {
+			const int partSize = 5 * 1024 * 1024; // 5MB parts (recommended for R2)
+			var fileInfo = new FileInfo(localFilePath);
+			var totalParts = (int)Math.Ceiling((double)fileInfo.Length / partSize);
+
+			// Step 1: Initiate multipart upload
+			var initiateRequest = new InitiateMultipartUploadRequest {
+				BucketName = bucketName,
+				Key = key,
+				ContentType = GetContentType(localFilePath)
+			};
+
+			var initiateResponse = await _s3Client.InitiateMultipartUploadAsync(initiateRequest, cancellationToken);
+			var uploadId = initiateResponse.UploadId;
+
+			var partETags = new List<PartETag>();
+			long uploadedBytes = 0;
+
+			try {
+				using var fileStream = new FileStream(localFilePath, FileMode.Open, FileAccess.Read);
+
+				// Step 2: Upload parts
+				for (int partNumber = 1; partNumber <= totalParts; partNumber++) {
+					cancellationToken.ThrowIfCancellationRequested();
+
+					var currentPartSize = Math.Min(partSize, fileInfo.Length - uploadedBytes);
+					var partRequest = new UploadPartRequest {
+						BucketName = bucketName,
+						Key = key,
+						UploadId = uploadId,
+						PartNumber = partNumber,
+						PartSize = currentPartSize,
+						DisablePayloadSigning = true,
+						DisableDefaultChecksumValidation = true,
+					};
+
+					var buffer = new byte[(int)currentPartSize];
+					await fileStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken);
+					partRequest.InputStream = new MemoryStream(buffer);
+
+					// Add progress reporting for this part
+					if (progress != null) {
+						var partStartBytes = uploadedBytes;
+						partRequest.StreamTransferProgress += (sender, args) => {
+							progress.Report(partStartBytes + args.TransferredBytes);
+						};
+					}
+
+					var uploadPartResponse = await _s3Client.UploadPartAsync(partRequest, cancellationToken);
+					partETags.Add(new PartETag(partNumber, uploadPartResponse.ETag));
+
+					uploadedBytes += buffer.Length;
+					// Final progress report for this part (in case StreamTransferProgress didn't reach 100%)
+					progress?.Report(uploadedBytes);
+				}
+
+				// Step 3: Complete multipart upload
+				var completeRequest = new CompleteMultipartUploadRequest {
+					BucketName = bucketName,
+					Key = key,
+					UploadId = uploadId,
+					PartETags = partETags
+				};
+
+				await _s3Client.CompleteMultipartUploadAsync(completeRequest, cancellationToken);
+
+			} catch (Exception) {
+				// Abort multipart upload on failure
+				try {
+					var abortRequest = new AbortMultipartUploadRequest {
+						BucketName = bucketName,
+						Key = key,
+						UploadId = uploadId
+					};
+					await _s3Client.AbortMultipartUploadAsync(abortRequest, cancellationToken);
+				} catch {
+					// Ignore abort failures
+				}
+				throw;
+			}
+		}
 
 		public void Dispose() {
 			_retryTimer?.Dispose();

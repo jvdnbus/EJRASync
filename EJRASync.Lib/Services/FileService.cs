@@ -1,4 +1,5 @@
 using EJRASync.Lib.Models;
+using EJRASync.Lib.Utils;
 using log4net;
 using System.Security.Cryptography;
 
@@ -34,7 +35,7 @@ namespace EJRASync.Lib.Services {
 									items.Add(new LocalFile {
 										Name = GetRelativePath(directoryPath, entry),
 										FullPath = entry,
-										DisplaySize = FormatFileSize(fileInfo.Length),
+										DisplaySize = FileSizeFormatter.FormatFileSize(fileInfo.Length),
 										LastModified = fileInfo.LastWriteTime,
 										SizeBytes = fileInfo.Length,
 										IsDirectory = false
@@ -75,7 +76,7 @@ namespace EJRASync.Lib.Services {
 								items.Add(new LocalFile {
 									Name = fileInfo.Name,
 									FullPath = file,
-									DisplaySize = FormatFileSize(fileInfo.Length),
+									DisplaySize = FileSizeFormatter.FormatFileSize(fileInfo.Length),
 									LastModified = fileInfo.LastWriteTime,
 									SizeBytes = fileInfo.Length,
 									IsDirectory = false
@@ -111,20 +112,6 @@ namespace EJRASync.Lib.Services {
 			return Convert.ToHexString(hashBytes).ToLowerInvariant();
 		}
 
-		public string FormatFileSize(long bytes) {
-			if (bytes == 0) return "0 B";
-
-			string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-			int suffixIndex = 0;
-			double size = bytes;
-
-			while (size >= 1024 && suffixIndex < suffixes.Length - 1) {
-				size /= 1024;
-				suffixIndex++;
-			}
-
-			return $"{size:F1} {suffixes[suffixIndex]}";
-		}
 
 		public bool IsValidDirectory(string path) {
 			return Directory.Exists(path);
@@ -153,7 +140,7 @@ namespace EJRASync.Lib.Services {
 					return new LocalFile {
 						Name = fileInfo.Name,
 						FullPath = filePath,
-						DisplaySize = FormatFileSize(fileInfo.Length),
+						DisplaySize = FileSizeFormatter.FormatFileSize(fileInfo.Length),
 						LastModified = fileInfo.LastWriteTime,
 						SizeBytes = fileInfo.Length,
 						IsDirectory = false,
