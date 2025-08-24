@@ -43,7 +43,7 @@ namespace EJRASync.UI {
 			string? acPathOverride = e.Args.Length > 0 ? e.Args[0] : null;
 
 			// Fetch AWS credentials before configuring services
-			var authApi = new EjraAuthApiService();
+			var authApi = new EjraApiService();
 			var tokens = await authApi.GetTokensAsync();
 
 			string awsAccessKeyId = "";
@@ -68,10 +68,7 @@ namespace EJRASync.UI {
 					});
 
 					// Register auth services from Lib
-					services.AddSingleton<IEjraAuthApiService, EjraAuthApiService>();
-					services.AddSingleton<IEjraAuthService, EjraAuthService>();
-					// UI aliases for backwards compatibility
-					services.AddSingleton<IEjraAuthApiService, EjraAuthApiService>();
+					services.AddSingleton<IEjraApiService, EjraApiService>();
 					services.AddSingleton<IEjraAuthService, EjraAuthService>();
 
 					// Register services from Lib with circular dependency resolution
@@ -92,7 +89,7 @@ namespace EJRASync.UI {
 						provider.GetRequiredService<IContentStatusService>(),
 						provider.GetRequiredService<ICompressionService>(),
 						provider.GetRequiredService<IDownloadService>(),
-						provider.GetRequiredService<IEjraAuthApiService>(),
+						provider.GetRequiredService<IEjraApiService>(),
 						provider.GetRequiredService<IEjraAuthService>(),
 						acPathOverride
 					));

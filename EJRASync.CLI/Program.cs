@@ -38,7 +38,7 @@ class CLI {
 			await autoUpdater.ProcessUpdates();
 
 			// Fetch AWS credentials before configuring S3 client
-			var authApi = new EjraAuthApiService();
+			var authApi = new EjraApiService();
 			var tokens = await authApi.GetTokensAsync();
 
 			string awsAccessKeyId = "";

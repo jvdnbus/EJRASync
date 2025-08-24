@@ -1,6 +1,9 @@
+using EJRASync.Lib.Models;
+
 namespace EJRASync.Lib.Services {
-	public interface IEjraAuthApiService {
+	public interface IEjraApiService {
 		Task<AuthTokenResponse?> GetTokensAsync(OAuthToken? accessToken = null);
+		Task<ArchiveMetadataResponse?> SubmitArchiveMetadataAsync(List<ArchiveMetadataItem> metadata, OAuthToken? accessToken = null, CancellationToken cancellationToken = default);
 	}
 
 	public class AuthTokenResponse {

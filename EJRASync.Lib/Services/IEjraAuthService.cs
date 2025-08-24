@@ -68,6 +68,7 @@ namespace EJRASync.Lib.Services {
 
 	public class UserProperties {
 		public string Id { get; set; } = string.Empty;
+		public string Scope { get; set; } = string.Empty;
 		[JsonPropertyName("access_token")]
 		public string AccessToken { get; set; } = string.Empty;
 		public AuthProvider Provider { get; set; }
@@ -81,7 +82,6 @@ namespace EJRASync.Lib.Services {
 		// Discord provider data (AuthProvider.Discord)
 		public DiscordApplication? Application { get; set; }
 		public string? Expires { get; set; }
-		public List<string>? Scopes { get; set; }
 		public DiscordUser? User { get; set; }
 	}
 

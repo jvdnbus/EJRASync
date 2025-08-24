@@ -1,0 +1,577 @@
+<views:DarkThemeWindow x:Class="EJRASync.UI.Views.ArchiveDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:EJRASync.UI"
+        xmlns:views="clr-namespace:EJRASync.UI.Views"
+        mc:Ignorable="d"
+        Title="Publish archive" Height="600" Width="900" 
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="CanResize">
+    <views:DarkThemeWindow.Resources>
+        <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
+        <local:BooleanToOpacityConverter x:Key="BooleanToOpacityConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+        <!-- Dark ScrollBar Styles (same as other dialogs) -->
+        <Style x:Key="DarkScrollBarThumb" TargetType="{x:Type Thumb}">
+            <Setter Property="Background" Value="#3E3E42"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Thumb}">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="2"/>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter Property="Background" Value="#666"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollBarVertical" TargetType="{x:Type ScrollBar}">
+            <Setter Property="Background" Value="#252526"/>
+            <Setter Property="Width" Value="5"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollBar}">
+                        <Grid>
+                            <Rectangle Fill="{TemplateBinding Background}"/>
+                            <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource DarkScrollBarThumb}"/>
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="DarkScrollViewer" TargetType="{x:Type ScrollViewer}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ScrollViewer}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <ScrollContentPresenter Grid.Column="0" Grid.Row="0"/>
+                            <ScrollBar x:Name="PART_VerticalScrollBar" 
+                                       Grid.Column="1" Grid.Row="0"
+                                       Style="{StaticResource DarkScrollBarVertical}"
+                                       Orientation="Vertical"
+                                       Value="{TemplateBinding VerticalOffset}"
+                                       Maximum="{TemplateBinding ScrollableHeight}"
+                                       ViewportSize="{TemplateBinding ViewportHeight}"
+                                       Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Modern Button Style -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="16,10"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#3E3E42"/>
+                                <Setter Property="BorderBrush" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter Property="Background" Value="#555"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#252526"/>
+                                <Setter Property="Foreground" Value="#6A6A6A"/>
+                                <Setter Property="BorderBrush" Value="#333"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Custom CheckBox Style for list items (non-interactive) -->
+        <Style x:Key="ModernCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="IsHitTestVisible" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="CheckBoxBorder"
+                                    Grid.Column="0"
+                                    Width="18"
+                                    Height="18"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="3"
+                                    Margin="0,0,8,0">
+                                <TextBlock x:Name="CheckMark"
+                                          Text="✓"
+                                          Foreground="#4CAF50"
+                                          FontSize="12"
+                                          FontWeight="Bold"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Left"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#2D4A2D"/>
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#4CAF50"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#555"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Interactive CheckBox Style for Select All -->
+        <Style x:Key="InteractiveCheckBoxStyle" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="#F0F0F0"/>
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="BorderBrush" Value="#3E3E42"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="CheckBoxBorder"
+                                    Grid.Column="0"
+                                    Width="18"
+                                    Height="18"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="3"
+                                    Margin="0,0,8,0">
+                                <TextBlock x:Name="CheckMark"
+                                          Text="✓"
+                                          Foreground="#4CAF50"
+                                          FontSize="12"
+                                          FontWeight="Bold"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Center"
+                                          Visibility="Collapsed"/>
+                            </Border>
+                            <ContentPresenter Grid.Column="1"
+                                            VerticalAlignment="Center"
+                                            HorizontalAlignment="Left"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                <Setter TargetName="CheckBoxBorder" Property="Background" Value="#2D4A2D"/>
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#4CAF50"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CheckBoxBorder" Property="BorderBrush" Value="#555"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </views:DarkThemeWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" Margin="0,0,0,16">
+            <Grid Margin="20,16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Image Grid.Column="0" Source="/Assets/Icons/archive.png" Width="24" Height="24" Margin="0,0,12,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="#F0F0F0">
+                        <Run Text="Publish archives to "/>
+                        <Hyperlink NavigateUri="https://ejra-mod-archive.enroy.lol" Foreground="#4187D6" TextDecorations="Underline" RequestNavigate="Hyperlink_RequestNavigate">
+                            <Run Text="ejra-mod-archive.enroy.lol"/>
+                        </Hyperlink>
+                    </TextBlock>
+                    <TextBlock Text="Select cars and tracks to package into archives" FontSize="13" Foreground="#AAAAAA" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Content Selection -->
+        <Grid Grid.Row="1" Margin="20,0,20,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Cars Section -->
+            <Border Grid.Column="0" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="1" CornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Cars Header -->
+                    <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" CornerRadius="4,4,0,0">
+                        <Grid Margin="12,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Grid.Column="0" Source="/Assets/Icons/folder.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" Text="Cars" FontWeight="SemiBold" Foreground="#F0F0F0" VerticalAlignment="Center"/>
+                            <CheckBox Grid.Column="2" Content="Select All" Style="{StaticResource InteractiveCheckBoxStyle}"
+                                     IsChecked="{Binding AreAllCarsSelected}" 
+                                     Command="{Binding ToggleAllCarsCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Cars List -->
+                    <ListBox Grid.Row="1" 
+                             ItemsSource="{Binding Cars}" 
+                             Margin="8"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.Resources>
+                            <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
+                        </ListBox.Resources>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <EventSetter Event="MouseLeftButtonUp" Handler="ListBoxItem_MouseLeftButtonUp"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="ItemBorder" 
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="3"
+                                                    Margin="0,1">
+                                                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#2A2D2E"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Name}" 
+                                         IsChecked="{Binding IsSelected}"
+                                         Style="{StaticResource ModernCheckBoxStyle}"
+                                         Margin="4,6"
+                                         HorizontalAlignment="Stretch"
+                                         HorizontalContentAlignment="Left"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+
+            <!-- Tracks Section -->
+            <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="1" CornerRadius="4">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    
+                    <!-- Tracks Header -->
+                    <Border Grid.Row="0" Background="#2D2D30" BorderBrush="#3E3E42" BorderThickness="0,0,0,1" CornerRadius="4,4,0,0">
+                        <Grid Margin="12,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Grid.Column="0" Source="/Assets/Icons/folder.png" Width="16" Height="16" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" Text="Tracks" FontWeight="SemiBold" Foreground="#F0F0F0" VerticalAlignment="Center"/>
+                            <CheckBox Grid.Column="2" Content="Select All" Style="{StaticResource InteractiveCheckBoxStyle}"
+                                     IsChecked="{Binding AreAllTracksSelected}" 
+                                     Command="{Binding ToggleAllTracksCommand}"/>
+                        </Grid>
+                    </Border>
+
+                    <!-- Tracks List -->
+                    <ListBox Grid.Row="1" 
+                             ItemsSource="{Binding Tracks}" 
+                             Margin="8"
+                             Background="Transparent"
+                             BorderThickness="0"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                        <ListBox.Resources>
+                            <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
+                        </ListBox.Resources>
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <EventSetter Event="MouseLeftButtonUp" Handler="ListBoxItem_MouseLeftButtonUp"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="ListBoxItem">
+                                            <Border x:Name="ItemBorder" 
+                                                    Background="{TemplateBinding Background}"
+                                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                                    CornerRadius="3"
+                                                    Margin="0,1">
+                                                <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ItemBorder" Property="Background" Value="#2A2D2E"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Name}" 
+                                         IsChecked="{Binding IsSelected}"
+                                         Style="{StaticResource ModernCheckBoxStyle}"
+                                         Margin="4,6"
+                                         HorizontalAlignment="Stretch"
+                                         HorizontalContentAlignment="Left"/>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- Status Info -->
+        <Border Grid.Row="2" Background="#252526" BorderBrush="#3E3E42" BorderThickness="0,1,0,1" Margin="0,0,0,0">
+            <Grid Margin="20,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Grid.Column="0" VerticalAlignment="Center" FontSize="13" Foreground="#CCCCCC">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="{}{0} items selected">
+                            <Binding Path="SelectedCount"/>
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock Grid.Column="1" Text="{Binding StatusMessage}" VerticalAlignment="Center" FontSize="13" Foreground="#F0F0F0"/>
+            </Grid>
+        </Border>
+
+        <!-- Progress Bar -->
+        <ProgressBar Grid.Row="3" 
+                    Value="{Binding ProgressValue}" 
+                    Maximum="100" 
+                    Height="8" 
+                    Margin="20,8,20,0"
+                    Background="#3E3E42"
+                    Foreground="#4CAF50"
+                    BorderThickness="0"
+                    Visibility="{Binding IsProcessing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                    IsIndeterminate="{Binding IsProgressIndeterminate}">
+            <ProgressBar.Template>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Border Background="{TemplateBinding Background}" 
+                            CornerRadius="4"
+                            ClipToBounds="True">
+                        <Grid>
+                            <Rectangle Name="PART_Track" />
+                            <Grid Name="PART_Indicator" 
+                                  ClipToBounds="True"
+                                  HorizontalAlignment="Left">
+                                <Rectangle Name="Indicator" 
+                                          Fill="{TemplateBinding Foreground}"
+                                          RadiusX="4" RadiusY="4"/>
+                                <Rectangle Name="IndeterminateIndicator" 
+                                          Fill="{TemplateBinding Foreground}"
+                                          RadiusX="4" RadiusY="4"
+                                          Width="50"
+                                          HorizontalAlignment="Left"
+                                          Visibility="Collapsed">
+                                    <Rectangle.RenderTransform>
+                                        <TranslateTransform x:Name="IndeterminateTransform"/>
+                                    </Rectangle.RenderTransform>
+                                </Rectangle>
+                            </Grid>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsIndeterminate" Value="True">
+                            <Setter TargetName="Indicator" Property="Visibility" Value="Collapsed"/>
+                            <Setter TargetName="IndeterminateIndicator" Property="Visibility" Value="Visible"/>
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="IndeterminateTransform"
+                                                        Storyboard.TargetProperty="X"
+                                                        From="-50"
+                                                        To="300"
+                                                        Duration="0:0:1.5"
+                                                        AutoReverse="False"/>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </ProgressBar.Template>
+        </ProgressBar>
+
+        <!-- Footer Buttons -->
+        <Grid Grid.Row="4" Margin="20,16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            
+            <!-- Start/Cancel Button -->
+            <Button Grid.Column="1" 
+                   Content="{Binding StartButtonText}"
+                   Command="{Binding StartCommand}"
+                   BorderThickness="1"
+                   Padding="20,10"
+                   FontWeight="Normal"
+                   FontSize="13">
+                <Button.Style>
+                    <Style TargetType="Button">
+                        <Setter Property="Background" Value="#2D4A2D"/>
+                        <Setter Property="Foreground" Value="#4CAF50"/>
+                        <Setter Property="BorderBrush" Value="#3A5A3A"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsProcessing}" Value="True">
+                                <Setter Property="Background" Value="#4A2D2D"/>
+                                <Setter Property="Foreground" Value="#FF6B6B"/>
+                                <Setter Property="BorderBrush" Value="#6B3A3A"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"
+                                            Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
+                                    <Condition Binding="{Binding IsProcessing}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#3E5A3E"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsMouseOver}" Value="True"/>
+                                    <Condition Binding="{Binding IsProcessing}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#5A3E3E"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsPressed}" Value="True"/>
+                                    <Condition Binding="{Binding IsProcessing}" Value="False"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#4A6A4A"/>
+                            </MultiDataTrigger>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding RelativeSource={RelativeSource Self}, Path=IsPressed}" Value="True"/>
+                                    <Condition Binding="{Binding IsProcessing}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#6A4A4A"/>
+                            </MultiDataTrigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#252526"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#333"/>
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+        </Grid>
+    </Grid>
+</views:DarkThemeWindow>

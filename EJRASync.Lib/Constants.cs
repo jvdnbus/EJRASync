@@ -9,12 +9,12 @@
 		public static readonly string GuiBucketName = "ejra-gui";
 		public static readonly string AppsBucketName = "ejra-apps";
 
-		public static readonly (string, string)[] Buckets = [
-			(CarsBucketName, "content/cars"),
-			(TracksBucketName, "content/tracks"),
-			(FontsBucketName, "content/fonts"),
-			(GuiBucketName, "content/gui"),
-			(AppsBucketName, "apps")
+		public static readonly (string, string, string[])[] Buckets = [
+			(CarsBucketName, "content/cars", [""]),
+			(TracksBucketName, "content/tracks", [""]),
+			(FontsBucketName, "content/fonts", [""]),
+			(GuiBucketName, "content/gui", [""]),
+			(AppsBucketName, "apps", ["lua", "python"])
 		];
 
 		public static readonly Dictionary<string, string> SteamRegistryKeys = new()
@@ -28,7 +28,7 @@
 		public static readonly string EjraAuthTokenExchange = "https://ejra-auth.enroy.lol/token";
 		public static readonly string EjraAuthClientId = "dab81f8c37e09d2145";
 		public static readonly string EjraAuthRedirectUri = "http://localhost:5050/callback";
-		public static readonly string EjraAuthApi = "https://ejra-auth-api.enroy.lol";
+		public static readonly string EjraApi = "https://ejra-api.enroy.lol";
 
 		public static readonly string CarsYamlFile = "cars.yaml";
 		public static readonly string TracksYamlFile = "tracks.yaml";
