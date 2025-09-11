@@ -179,7 +179,7 @@ namespace EJRASync.Lib {
 				StartInfo = new ProcessStartInfo {
 					FileName = _exePath,
 					UseShellExecute = true,
-					Arguments = _acPath ?? ""
+					Arguments = _acPath != null ? $"\"{_acPath}\"" : ""
 				}
 			};
 
