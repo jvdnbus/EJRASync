@@ -31,10 +31,9 @@ namespace EJRASync.Lib.Services {
 			_hashStoreService = hashStoreService;
 			_progressService = progressService;
 
-			var steamPath = PathUtils.NormalizePath(SteamHelper.FindSteam());
-			_progressService.ShowMessage($"Steam path: {steamPath}");
-
 			if (acPath == null) {
+				var steamPath = PathUtils.NormalizePath(SteamHelper.FindSteam());
+				_progressService.ShowMessage($"Steam path: {steamPath}");
 				acPath = PathUtils.NormalizePath(SteamHelper.FindAssettoCorsa(steamPath));
 			} else {
 				_progressService.ShowMessage($"Overriden AC path");
