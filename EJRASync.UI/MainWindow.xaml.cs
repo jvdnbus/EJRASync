@@ -482,16 +482,47 @@ namespace EJRASync.UI {
 
 
 		// Helper method to find ancestor of specific type in visual tree
+		private void LocalFilesDataGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) {
+			var dataGrid = sender as DataGrid;
+			if (dataGrid == null) return;
+
+			// Get the point where the context menu was opened
+			var mousePosition = Mouse.GetPosition(dataGrid);
+			
+			// Find the DataGridRow under the mouse cursor
+			var hitTestResult = VisualTreeHelper.HitTest(dataGrid, mousePosition);
+			if (hitTestResult?.VisualHit != null) {
+				var row = FindAncestor<DataGridRow>(hitTestResult.VisualHit);
+				if (row?.DataContext is LocalFileItem fileItem) {
+					// Select the item under the cursor
+					dataGrid.SelectedItem = fileItem;
+					_viewModel.LocalFiles.SelectedFile = fileItem;
+				}
+			}
+		}
+
 		private void RemoteFilesDataGrid_ContextMenuOpening(object sender, ContextMenuEventArgs e) {
 			var dataGrid = sender as DataGrid;
 			var contextMenu = dataGrid?.ContextMenu;
 
 			if (contextMenu == null) return;
 
+			// Get the point where the context menu was opened and select the item under cursor
+			var mousePosition = Mouse.GetPosition(dataGrid);
+			var hitTestResult = VisualTreeHelper.HitTest(dataGrid, mousePosition);
+			if (hitTestResult?.VisualHit != null) {
+				var row = FindAncestor<DataGridRow>(hitTestResult.VisualHit);
+				if (row?.DataContext is RemoteFileItem fileItem) {
+					// Select the item under the cursor
+					dataGrid.SelectedItem = fileItem;
+					_viewModel.RemoteFiles.SelectedFile = fileItem;
+				}
+			}
+
 			// Clear existing items
 			contextMenu.Items.Clear();
 
-			// Get the selected file from the PlacementTarget to avoid visual tree searches
+			// Get the selected file
 			var selectedFile = _viewModel.RemoteFiles.SelectedFile;
 			if (selectedFile == null) {
 				e.Handled = true;
