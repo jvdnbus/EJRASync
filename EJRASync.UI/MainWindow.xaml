@@ -792,6 +792,7 @@
                     <DataGrid ItemsSource="{Binding LocalFiles.Files}"
                              SelectedItem="{Binding LocalFiles.SelectedFile}"
                              x:Name="LocalFilesDataGrid"
+                             ContextMenuOpening="LocalFilesDataGrid_ContextMenuOpening"
                              AutoGenerateColumns="False"
                              GridLinesVisibility="None"
                              HeadersVisibility="Column"
