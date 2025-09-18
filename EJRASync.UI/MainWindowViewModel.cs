@@ -297,7 +297,113 @@ namespace EJRASync.UI {
 			}
 		}
 
-		private async Task ScanBucketChangesAsync(string bucketName, string localPath, CancellationToken cancellationToken = default) {
+		public async Task ScanSpecificPathsAsync(List<string> paths) {
+			if (!paths?.Any() == true)
+				return;
+
+			IsScanning = true;
+			StatusMessage = "Scanning selected paths for changes...";
+			ProgressValue = 0;
+
+			_operationCancellationTokenSource = new CancellationTokenSource();
+			CancelOperationCommand.NotifyCanExecuteChanged();
+			ScanChangesCommand.NotifyCanExecuteChanged();
+
+			try {
+				// Don't clear all pending changes, just scan the new paths
+				var initialChangeCount = PendingChanges.Count;
+
+				Dictionary<(string, string), HashSet<string>> localFilePathsToScan = new();
+				Dictionary<(string, string), HashSet<string>> remoteDirPathsToScan = new();
+				for (int i = 0; i < paths.Count; i++) {
+					var path = paths[i].Replace('/', '\\');
+					if (Directory.Exists(path) || File.Exists(path)) {
+						var (bucketName, subRoot) = DetermineBucketNameFromPath(path);
+						if (!string.IsNullOrEmpty(bucketName)) {
+							//var scanPath = Directory.Exists(path) ? path : Path.GetDirectoryName(path);
+							var relativePath = Path.GetRelativePath(subRoot, path);
+							var pathRoot = Path.Combine(subRoot, relativePath.Split('\\')[0]);
+							var key = (bucketName, subRoot);
+							HashSet<string> pathsToScan;
+							HashSet<string> remotePaths;
+							if (!localFilePathsToScan.TryGetValue(key, out pathsToScan)) {
+								pathsToScan = new HashSet<string>();
+								localFilePathsToScan[key] = pathsToScan;
+							}
+							if (!remoteDirPathsToScan.TryGetValue(key, out remotePaths)) {
+								remotePaths = new HashSet<string>();
+								remoteDirPathsToScan[key] = remotePaths;
+							}
+							remotePaths.Add(pathRoot); // Also add the car/track/... dir so we can filter
+							pathsToScan.Add(path); // Add the full filename
+						}
+					}
+				}
+
+				int j = 0;
+				foreach (var (key, pathsToScan) in localFilePathsToScan) {
+					_operationCancellationTokenSource.Token.ThrowIfCancellationRequested();
+
+					var (bucketName, path) = key;
+					var remoteDirs = remoteDirPathsToScan[key];
+					await ScanBucketChangesAsync(bucketName, path, _operationCancellationTokenSource.Token, (remoteDirs, pathsToScan));
+
+					if (!IsCancelling) {
+						ProgressValue = (j + 1) * 100.0 / localFilePathsToScan.Count;
+					}
+					j++;
+				}
+
+				if (!IsCancelling) {
+					var newChangesCount = PendingChanges.Count - initialChangeCount;
+					StatusMessage = $"Found {newChangesCount} new changes in selected paths";
+
+					// Update UI after scanning is complete
+					OnPropertyChanged(nameof(ViewChangesButtonText));
+					ViewChangesCommand.NotifyCanExecuteChanged();
+					DiscardChangesCommand.NotifyCanExecuteChanged();
+					ApplyChangesCommand.NotifyCanExecuteChanged();
+
+					// Update remote file list preview
+					RemoteFiles.UpdatePendingChangesPreview(PendingChanges);
+				}
+			} catch (OperationCanceledException) {
+				StatusMessage = "Scan cancelled";
+			} catch (Exception ex) {
+				if (!IsCancelling) {
+					StatusMessage = $"Error scanning: {ex.Message}";
+				}
+			} finally {
+				IsScanning = false;
+				IsCancelling = false;
+				IsProgressIndeterminate = false;
+				ProgressValue = 0;
+				_operationCancellationTokenSource?.Dispose();
+				_operationCancellationTokenSource = null;
+				CancelOperationCommand.NotifyCanExecuteChanged();
+				ScanChangesCommand.NotifyCanExecuteChanged();
+			}
+		}
+
+		private (string, string) DetermineBucketNameFromPath(string filePath) {
+			var basePath = NavigationContext.LocalBasePath.Replace('/', '\\');
+			var relativePath = Path.GetRelativePath(basePath, filePath.Replace('/', '\\'));
+
+			if (relativePath.StartsWith("content\\cars", StringComparison.OrdinalIgnoreCase))
+				return (Constants.CarsBucketName, Path.Combine(basePath, "content", "cars"));
+			if (relativePath.StartsWith("content\\tracks", StringComparison.OrdinalIgnoreCase))
+				return (Constants.TracksBucketName, Path.Combine(basePath, "content", "tracks"));
+			if (relativePath.StartsWith("content\\fonts", StringComparison.OrdinalIgnoreCase))
+				return (Constants.FontsBucketName, Path.Combine(basePath, "content", "fonts"));
+			if (relativePath.StartsWith("content\\gui", StringComparison.OrdinalIgnoreCase))
+				return (Constants.GuiBucketName, Path.Combine(basePath, "content", "gui"));
+			if (relativePath.StartsWith("apps", StringComparison.OrdinalIgnoreCase))
+				return (Constants.AppsBucketName, Path.Combine(basePath, "apps"));
+
+			return (null, null);
+		}
+
+		private async Task ScanBucketChangesAsync(string bucketName, string localPath, CancellationToken cancellationToken = default, (HashSet<string>, HashSet<string>) pathsToScan = default) {
 			// Use indeterminate progress for unpredictable bucket scanning work
 			IsProgressIndeterminate = true;
 			StatusMessage = $"Scanning {bucketName}...";
@@ -319,7 +425,10 @@ namespace EJRASync.UI {
 				foreach (var remoteDir in remoteDirs) {
 					cancellationToken.ThrowIfCancellationRequested();
 
-					var localDirPath = Path.Combine(localPath, remoteDir);
+					var localDirPath = Path.Combine(localPath, remoteDir).Replace('/', '\\');
+					if (pathsToScan.Item1?.Count > 0) {
+						if (!pathsToScan.Item1.Contains(localDirPath)) continue;
+					}
 
 					// Update status to show current directory being scanned
 					if (!IsCancelling) {
@@ -335,10 +444,16 @@ namespace EJRASync.UI {
 							.Select(RemoteFileItem.FromLib));
 
 						// Get all local files in this directory recursively
-						var localDirFiles = await _fileService.GetLocalFilesAsync(localDirPath, true);
-						allLocalFiles
-							.AddRange(localDirFiles.Where(f => !f.IsDirectory)
-							.Select(LocalFileItem.FromLib));
+						var localDirFiles = (await _fileService.GetLocalFilesAsync(localDirPath, true))
+							.Where(f => !f.IsDirectory)
+							.Select(LocalFileItem.FromLib);
+						if (pathsToScan.Item2?.Count > 0) {
+							foreach (var pathToScan in pathsToScan.Item2) {
+								allLocalFiles.AddRange(localDirFiles.Where(f => f.FullPath.StartsWith(pathToScan)));
+							}
+						} else {
+							allLocalFiles.AddRange(localDirFiles);
+						}
 					}
 				}
 
@@ -372,7 +487,8 @@ namespace EJRASync.UI {
 
 				// Update status message to show current file being compared with progress
 				if (!IsCancelling) {
-					StatusMessage = $"Comparing {bucketName} : ({processedCount}/{totalFiles}) {Path.GetFileName(localFile.FullPath)}";
+					var rootOfRelativePath = relativePath.Split('/')[0];
+					StatusMessage = $"Comparing {bucketName} ({processedCount}/{totalFiles}) {rootOfRelativePath}/.../{Path.GetFileName(localFile.FullPath)}";
 				}
 
 				// Skip files that match exclusion patterns

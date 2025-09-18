@@ -1,4 +1,3 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EJRASync.Lib.Services;
 using EJRASync.Lib.Utils;
@@ -6,11 +5,10 @@ using EJRASync.UI.Models;
 using EJRASync.UI.Services;
 using EJRASync.UI.Utils;
 using log4net;
-using System.Collections.ObjectModel;
 using System.IO;
 
 namespace EJRASync.UI.ViewModels {
-	public partial class RemoteFileListViewModel : ObservableObject {
+	public partial class RemoteFileListViewModel : BaseFileListViewModel<RemoteFileItem> {
 		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(RemoteFileListViewModel));
 		private readonly IS3Service _s3Service;
 		private readonly IHashStoreService _hashStoreService;
@@ -22,26 +20,11 @@ namespace EJRASync.UI.ViewModels {
 		private const string FolderDisplaySize = "Folder";
 		private const string BucketListDisplaySize = "Bucket List";
 
-		[ObservableProperty]
-		private ObservableCollection<RemoteFileItem> _files = new();
-
-		[ObservableProperty]
-		private string _currentPath = string.Empty;
-
-		[ObservableProperty]
-		private RemoteFileItem? _selectedFile;
-
-		[ObservableProperty]
-		private ObservableCollection<RemoteFileItem> _selectedFiles = new();
-
-		[ObservableProperty]
-		private bool _isLoading = false;
-
 		public RemoteFileListViewModel(
 			IS3Service s3Service,
 			IHashStoreService hashStoreService,
 			IContentStatusService contentStatusService,
-			MainWindowViewModel mainViewModel) {
+			MainWindowViewModel mainViewModel) : base() {
 			_s3Service = s3Service;
 			_hashStoreService = hashStoreService;
 			_contentStatusService = contentStatusService;
@@ -51,11 +34,15 @@ namespace EJRASync.UI.ViewModels {
 			_contentStatusService.ContentStatusChanged += OnContentStatusChanged;
 		}
 
+		protected override string GetFileName(RemoteFileItem file) {
+			return file.Name;
+		}
+
 		public async Task LoadBucketsAsync() {
 			await this.InvokeUIAsync(() => {
 				IsLoading = true;
 				CurrentPath = "/";
-				Files.Clear();
+				_allFiles.Clear();
 			});
 
 			try {
@@ -63,7 +50,7 @@ namespace EJRASync.UI.ViewModels {
 
 				await this.InvokeUIAsync(() => {
 					foreach (var bucket in buckets) {
-						Files.Add(new RemoteFileItem {
+						_allFiles.Add(new RemoteFileItem {
 							Name = bucket,
 							Key = bucket,
 							DisplaySize = BucketString,
@@ -72,6 +59,7 @@ namespace EJRASync.UI.ViewModels {
 						});
 					}
 
+					FilterFiles(); // Apply current filter
 					_mainViewModel.NavigationContext.SelectedBucket = null;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = "";
 
@@ -99,13 +87,13 @@ namespace EJRASync.UI.ViewModels {
 				var files = await _s3Service.ListObjectsAsync(bucketName, prefix);
 
 				await this.InvokeUIAsync(() => {
-					Files.Clear();
+					_allFiles.Clear();
 
 					// Add parent navigation
 					if (!string.IsNullOrEmpty(prefix)) {
 						// Navigate back within bucket
 						var parentPrefix = GetParentPrefix(prefix);
-						Files.Add(new RemoteFileItem {
+						_allFiles.Add(new RemoteFileItem {
 							Name = ParentDirectoryName,
 							Key = ParentDirectoryName,
 							DisplaySize = FolderDisplaySize,
@@ -114,7 +102,7 @@ namespace EJRASync.UI.ViewModels {
 						});
 					} else if (!string.IsNullOrEmpty(bucketName)) {
 						// Navigate back to bucket list
-						Files.Add(new RemoteFileItem {
+						_allFiles.Add(new RemoteFileItem {
 							Name = ParentDirectoryName,
 							Key = ParentDirectoryName,
 							DisplaySize = BucketListDisplaySize,
@@ -134,9 +122,10 @@ namespace EJRASync.UI.ViewModels {
 							file.IsActive = _contentStatusService.IsContentActive(bucketName, file.Name);
 						}
 
-						Files.Add(file);
+						_allFiles.Add(file);
 					}
 
+					FilterFiles(); // Apply current filter
 					_mainViewModel.NavigationContext.SelectedBucket = bucketName;
 					_mainViewModel.NavigationContext.RemoteCurrentPath = prefix;
 
@@ -305,7 +294,7 @@ namespace EJRASync.UI.ViewModels {
 
 					// Clear existing pending change status and remove preview-only items
 					var itemsToRemove = new List<RemoteFileItem>();
-					foreach (var file in Files) {
+					foreach (var file in _allFiles) {
 						if (file.IsPendingChange) {
 							if (file.IsPreviewOnly) {
 								// Remove preview-only items (like new folder previews)
@@ -318,9 +307,10 @@ namespace EJRASync.UI.ViewModels {
 						}
 					}
 
-					// Remove preview-only items
+					// Remove preview-only items from both collections
 					foreach (var item in itemsToRemove) {
-						Files.Remove(item);
+						_allFiles.Remove(item);
+						_filteredFiles.Remove(item);
 					}
 
 					// Find pending changes that affect current directory
@@ -333,7 +323,7 @@ namespace EJRASync.UI.ViewModels {
 
 					foreach (var changeGroup in changesByFileName) {
 						var fileName = changeGroup.Key;
-						var existingFile = Files.FirstOrDefault(f => f.Name == fileName);
+						var existingFile = _allFiles.FirstOrDefault(f => f.Name == fileName);
 						var firstChange = changeGroup.First();
 
 						if (existingFile != null) {
@@ -356,7 +346,10 @@ namespace EJRASync.UI.ViewModels {
 								IsPreviewOnly = true,
 								Status = "(To be added)"
 							};
-							Files.Add(newFile);
+							_allFiles.Add(newFile);
+							if (string.IsNullOrWhiteSpace(SearchText) || newFile.Name.ToLowerInvariant().Contains(SearchText.ToLowerInvariant())) {
+								_filteredFiles.Add(newFile);
+							}
 						}
 					}
 				});

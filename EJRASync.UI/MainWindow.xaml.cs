@@ -627,5 +627,87 @@ namespace EJRASync.UI {
 			while (current != null);
 			return null;
 		}
+
+		private void MainWindow_KeyDown(object sender, KeyEventArgs e) {
+			// Check if a search input has focus
+			var focusedElement = Keyboard.FocusedElement as FrameworkElement;
+			if (focusedElement?.Name == "LocalSearchTextBox" || focusedElement?.Name == "RemoteSearchTextBox") {
+				return;
+			}
+
+			// Handle quick navigation (a-z and 0-9 keypresses)
+			char character = '\0';
+
+			if (e.Key >= Key.A && e.Key <= Key.Z) {
+				character = (char)('a' + (e.Key - Key.A));
+			} else if (e.Key >= Key.D0 && e.Key <= Key.D9) {
+				character = (char)('0' + (e.Key - Key.D0));
+			} else if (e.Key >= Key.NumPad0 && e.Key <= Key.NumPad9) {
+				character = (char)('0' + (e.Key - Key.NumPad0));
+			}
+
+			if (character != '\0') {
+				// First check if either DataGrid or its children have explicit focus
+				var localHasFocus = LocalFilesDataGrid.IsKeyboardFocusWithin;
+				var remoteHasFocus = RemoteFilesDataGrid.IsKeyboardFocusWithin;
+
+				DataGrid? targetDataGrid = null;
+
+				if (localHasFocus && !remoteHasFocus) {
+					targetDataGrid = LocalFilesDataGrid;
+				} else if (remoteHasFocus && !localHasFocus) {
+					targetDataGrid = RemoteFilesDataGrid;
+				} else {
+					// Neither has explicit focus, check mouse position
+					var mousePosition = Mouse.GetPosition(this);
+					var localBounds = GetElementBounds(LocalFilesDataGrid);
+					var remoteBounds = GetElementBounds(RemoteFilesDataGrid);
+
+					if (IsPointInBounds(mousePosition, localBounds)) {
+						targetDataGrid = LocalFilesDataGrid;
+					} else if (IsPointInBounds(mousePosition, remoteBounds)) {
+						targetDataGrid = RemoteFilesDataGrid;
+					}
+				}
+
+				if (targetDataGrid == LocalFilesDataGrid) {
+					_viewModel.LocalFiles.HandleQuickNavigation(character);
+					if (_viewModel.LocalFiles.SelectedFile != null) {
+						LocalFilesDataGrid.ScrollIntoView(_viewModel.LocalFiles.SelectedFile);
+					}
+					e.Handled = true;
+				} else if (targetDataGrid == RemoteFilesDataGrid) {
+					_viewModel.RemoteFiles.HandleQuickNavigation(character);
+					if (_viewModel.RemoteFiles.SelectedFile != null) {
+						RemoteFilesDataGrid.ScrollIntoView(_viewModel.RemoteFiles.SelectedFile);
+					}
+					e.Handled = true;
+				}
+			}
+		}
+
+		private Rect GetElementBounds(FrameworkElement element) {
+			var transform = element.TransformToAncestor(this);
+			return transform.TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight));
+		}
+
+		private bool IsPointInBounds(Point point, Rect bounds) {
+			return bounds.Contains(point);
+		}
+
+		private void SearchTextBox_KeyDown(object sender, KeyEventArgs e) {
+			if (e.Key == Key.Escape) {
+				var textBox = sender as TextBox;
+				if (textBox?.Name == "LocalSearchTextBox") {
+					_viewModel.LocalFiles.SearchText = string.Empty;
+					LocalFilesDataGrid.Focus();
+				} else if (textBox?.Name == "RemoteSearchTextBox") {
+					_viewModel.RemoteFiles.SearchText = string.Empty;
+					RemoteFilesDataGrid.Focus();
+				}
+				e.Handled = true;
+			}
+		}
+
 	}
 }
