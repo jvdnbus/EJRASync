@@ -1,37 +1,24 @@
-using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using EJRASync.Lib.Utils;
 using EJRASync.UI.Models;
 using EJRASync.UI.Utils;
 using log4net;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 
 namespace EJRASync.UI.ViewModels {
-	public partial class LocalFileListViewModel : ObservableObject {
+	public partial class LocalFileListViewModel : BaseFileListViewModel<LocalFileItem> {
 		private static readonly ILog _logger = Lib.LoggingHelper.GetLogger(typeof(LocalFileListViewModel));
 		private readonly Lib.Services.IFileService _fileService;
 		private readonly MainWindowViewModel _mainViewModel;
 
-		[ObservableProperty]
-		private ObservableCollection<LocalFileItem> _files = new();
-
-		[ObservableProperty]
-		private string _currentPath = string.Empty;
-
-		[ObservableProperty]
-		private LocalFileItem? _selectedFile;
-
-		[ObservableProperty]
-		private ObservableCollection<LocalFileItem> _selectedFiles = new();
-
-		[ObservableProperty]
-		private bool _isLoading = false;
-
-		public LocalFileListViewModel(Lib.Services.IFileService fileService, MainWindowViewModel mainViewModel) {
+		public LocalFileListViewModel(Lib.Services.IFileService fileService, MainWindowViewModel mainViewModel) : base() {
 			_fileService = fileService;
 			_mainViewModel = mainViewModel;
+		}
+
+		protected override string GetFileName(LocalFileItem file) {
+			return file.Name;
 		}
 
 		public async Task LoadFilesAsync(string path) {
@@ -49,12 +36,12 @@ namespace EJRASync.UI.ViewModels {
 				var files = await _fileService.GetLocalFilesAsync(path);
 
 				await this.InvokeUIAsync(() => {
-					Files.Clear();
+					_allFiles.Clear();
 
 					// Add parent directory navigation if not at root
 					var basePath = _mainViewModel.NavigationContext.LocalBasePath;
 					if (!string.Equals(path, basePath, StringComparison.OrdinalIgnoreCase)) {
-						Files.Add(new LocalFileItem {
+						_allFiles.Add(new LocalFileItem {
 							Name = "..",
 							FullPath = _fileService.GetParentDirectory(path),
 							DisplaySize = "Folder",
@@ -64,9 +51,10 @@ namespace EJRASync.UI.ViewModels {
 					}
 
 					foreach (var libFile in files) {
-						Files.Add(LocalFileItem.FromLib(libFile));
+						_allFiles.Add(LocalFileItem.FromLib(libFile));
 					}
 
+					FilterFiles(); // Apply current filter
 					_mainViewModel.StatusMessage = "Ready";
 				});
 			} catch (Exception ex) {
@@ -328,5 +316,17 @@ namespace EJRASync.UI.ViewModels {
 
 			return allFiles;
 		}
+
+		[RelayCommand]
+		private async Task ScanChangesSelected(LocalFileItem? file) {
+			var filesToProcess = SelectedFiles.Count > 0 ? SelectedFiles.ToList() : (file != null ? new List<LocalFileItem> { file } : new List<LocalFileItem>());
+
+			if (!filesToProcess.Any())
+				return;
+
+			var paths = filesToProcess.Select(item => item.FullPath).ToList();
+			await _mainViewModel.ScanSpecificPathsAsync(paths);
+		}
+
 	}
 }

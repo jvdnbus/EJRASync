@@ -5,10 +5,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EJRASync.UI"
         xmlns:views="clr-namespace:EJRASync.UI.Views"
+        xmlns:controls="clr-namespace:EJRASync.UI.Controls"
         xmlns:sys="clr-namespace:System;assembly=mscorlib"
         xmlns:lib="clr-namespace:EJRASync.Lib;assembly=EJRASync.Lib"
         mc:Ignorable="d"
-        Height="800" Width="700" MinHeight="700" MinWidth="700">
+        Height="800" Width="700" MinHeight="700" MinWidth="700"
+        KeyDown="MainWindow_KeyDown">
     <views:DarkThemeWindow.Resources>
         <!-- Value converters for UI state -->
         <local:InverseBooleanConverter x:Key="InverseBooleanConverter"/>
@@ -786,16 +788,8 @@
                     </Style>
                 </Border.Style>
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- Header -->
-
                     <!-- File list -->
-                    <DataGrid Grid.Row="1" 
-                             ItemsSource="{Binding LocalFiles.Files}"
+                    <DataGrid ItemsSource="{Binding LocalFiles.Files}"
                              SelectedItem="{Binding LocalFiles.SelectedFile}"
                              x:Name="LocalFilesDataGrid"
                              AutoGenerateColumns="False"
@@ -817,7 +811,7 @@
                              BorderThickness="0"
                              RowHeight="24"
                              FontSize="13"
-                             Margin="0,0,0,4" ColumnHeaderHeight="30">
+                             Margin="0,0,0,4" ColumnHeaderHeight="34">
                         
                         <DataGrid.Resources>
                             <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
@@ -830,7 +824,7 @@
                                 <Setter Property="Foreground" Value="#F0F0F0"/>
                                 <Setter Property="BorderBrush" Value="#3E3E42"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="Padding" Value="8,0"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Style>
                         </DataGrid.ColumnHeaderStyle>
@@ -871,6 +865,17 @@
 
                         <DataGrid.ContextMenu>
                             <ContextMenu  Background="#2D2D30" BorderBrush="#3E3E42">
+                                <MenuItem Header="Scan Changes" 
+                                         Command="{Binding LocalFiles.ScanChangesSelectedCommand}"
+                                         CommandParameter="{Binding LocalFiles.SelectedFile}"
+                                         Background="#2D2D30"
+                                         Foreground="#F0F0F0"
+                                         IsEnabled="{Binding HasWriteAccess}">
+                                    <MenuItem.Icon>
+                                        <Image Source="/Assets/Icons/search.png" Style="{StaticResource ContextMenuIconStyle}"/>
+                                    </MenuItem.Icon>
+                                </MenuItem>
+                                <Separator Background="#3E3E42"/>
                                 <MenuItem Header="Compress &amp; upload" 
                                          Command="{Binding LocalFiles.CompressAndUploadCommand}"
                                          CommandParameter="{Binding LocalFiles.SelectedFile}"
@@ -911,14 +916,70 @@
                         </DataGrid.InputBindings>
 
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="VerticalAlignment" Value="Center"/>
-                                        <Setter Property="Margin" Value="8,0"/>
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                            </DataGridTextColumn>
+                            <DataGridTemplateColumn Width="*" IsReadOnly="True">
+                                <DataGridTemplateColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Name" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <Border Grid.Column="2" x:Name="LocalSearchBorder" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="1" CornerRadius="3"
+                                                    Width="180" Height="26" VerticalAlignment="Center">
+                                                <Grid>
+                                                    <TextBox Text="{Binding DataContext.LocalFiles.SearchText, RelativeSource={RelativeSource AncestorType=DataGrid}, UpdateSourceTrigger=PropertyChanged}" 
+                                                             x:Name="LocalSearchTextBox"
+                                                             KeyDown="SearchTextBox_KeyDown"
+                                                             Background="Transparent"
+                                                             Foreground="#F0F0F0"
+                                                             CaretBrush="#F0F0F0"
+                                                             BorderThickness="0"
+                                                             Margin="24,4,8,4"
+                                                             FontSize="12"
+                                                             VerticalAlignment="Center">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsFocused" Value="True">
+                                                                        <Setter Property="Background" Value="Transparent"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                    <Image Source="/Assets/Icons/search.png" 
+                                                           Width="12" Height="12" 
+                                                           Opacity="0.7"
+                                                           HorizontalAlignment="Left" 
+                                                           VerticalAlignment="Center"
+                                                           Margin="6,0,0,0"
+                                                           IsHitTestVisible="False"/>
+                                                </Grid>
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="BorderBrush" Value="#3E3E42"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                <Setter Property="BorderBrush" Value="#007ACC"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.HeaderTemplate>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <controls:HighlightTextBlock SourceText="{Binding Name}" 
+                                                                     HighlightText="{Binding DataContext.LocalFiles.SearchText, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                     VerticalAlignment="Center" 
+                                                                     Margin="8,0"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <DataGridTextColumn Header="Size" Binding="{Binding DisplaySize}" Width="80" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
@@ -946,15 +1007,8 @@
             <Border Grid.Column="2" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="0,1,0,0" CornerRadius="5,5,0,0"
                     Visibility="{Binding HasWriteAccess, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    
-                    <!-- Header -->
-
                     <!-- File list -->
-                    <DataGrid Grid.Row="1" 
+                    <DataGrid 
                              ItemsSource="{Binding RemoteFiles.Files}"
                              SelectedItem="{Binding RemoteFiles.SelectedFile}"
                              x:Name="RemoteFilesDataGrid"
@@ -978,7 +1032,7 @@
                              BorderThickness="0"
                              RowHeight="24"
                              FontSize="13"
-                             Margin="0,0,0,4" ColumnHeaderHeight="30">
+                             Margin="0,0,0,4" ColumnHeaderHeight="34">
                         
                         <DataGrid.Resources>
                             <Style TargetType="ScrollViewer" BasedOn="{StaticResource DarkScrollViewer}"/>
@@ -991,7 +1045,7 @@
                                 <Setter Property="Foreground" Value="#F0F0F0"/>
                                 <Setter Property="BorderBrush" Value="#3E3E42"/>
                                 <Setter Property="BorderThickness" Value="0,0,0,1"/>
-                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="Padding" Value="8,0"/>
                                 <Setter Property="FontWeight" Value="SemiBold"/>
                             </Style>
                         </DataGrid.ColumnHeaderStyle>
@@ -1067,14 +1121,70 @@
                         </DataGrid.InputBindings>
 
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="Name" Binding="{Binding Name}" Width="*" IsReadOnly="True">
-                                <DataGridTextColumn.ElementStyle>
-                                    <Style TargetType="TextBlock">
-                                        <Setter Property="VerticalAlignment" Value="Center"/>
-                                        <Setter Property="Margin" Value="8,0"/>
-                                    </Style>
-                                </DataGridTextColumn.ElementStyle>
-                            </DataGridTextColumn>
+                            <DataGridTemplateColumn Width="*" IsReadOnly="True">
+                                <DataGridTemplateColumn.HeaderTemplate>
+                                    <DataTemplate>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="Name" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                            <Border Grid.Column="2" x:Name="RemoteSearchBorder" Background="#1E1E1E" BorderBrush="#3E3E42" BorderThickness="1" CornerRadius="3"
+                                                    Width="180" Height="26" VerticalAlignment="Center">
+                                                <Grid>
+                                                    <TextBox Text="{Binding DataContext.RemoteFiles.SearchText, RelativeSource={RelativeSource AncestorType=DataGrid}, UpdateSourceTrigger=PropertyChanged}" 
+                                                             x:Name="RemoteSearchTextBox"
+                                                             KeyDown="SearchTextBox_KeyDown"
+                                                             Background="Transparent"
+                                                             Foreground="#F0F0F0"
+                                                             CaretBrush="#F0F0F0"
+                                                             BorderThickness="0"
+                                                             Margin="24,4,8,4"
+                                                             FontSize="12"
+                                                             VerticalAlignment="Center">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsFocused" Value="True">
+                                                                        <Setter Property="Background" Value="Transparent"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                    <Image Source="/Assets/Icons/search.png" 
+                                                           Width="12" Height="12" 
+                                                           Opacity="0.7"
+                                                           HorizontalAlignment="Left" 
+                                                           VerticalAlignment="Center"
+                                                           Margin="6,0,0,0"
+                                                           IsHitTestVisible="False"/>
+                                                </Grid>
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="BorderBrush" Value="#3E3E42"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                                <Setter Property="BorderBrush" Value="#007ACC"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+                                        </Grid>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.HeaderTemplate>
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <controls:HighlightTextBlock SourceText="{Binding Name}" 
+                                                                     HighlightText="{Binding DataContext.RemoteFiles.SearchText, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                                     VerticalAlignment="Center" 
+                                                                     Margin="8,0"/>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
 
                             <DataGridTextColumn Header="Status" Binding="{Binding Status}" Width="110" IsReadOnly="True">
                                 <DataGridTextColumn.ElementStyle>
