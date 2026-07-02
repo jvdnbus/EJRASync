@@ -245,8 +245,8 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock FontSize="18" FontWeight="SemiBold" Foreground="#F0F0F0">
                         <Run Text="Publish archives to "/>
-                        <Hyperlink NavigateUri="https://ejra-mod-archive.enroy.lol" Foreground="#4187D6" TextDecorations="Underline" RequestNavigate="Hyperlink_RequestNavigate">
-                            <Run Text="ejra-mod-archive.enroy.lol"/>
+                        <Hyperlink NavigateUri="https://ejra-mod-archive.enroy.space" Foreground="#4187D6" TextDecorations="Underline" RequestNavigate="Hyperlink_RequestNavigate">
+                            <Run Text="ejra-mod-archive.enroy.space"/>
                         </Hyperlink>
                     </TextBlock>
                     <TextBlock Text="Select cars and tracks to package into archives" FontSize="13" Foreground="#AAAAAA" Margin="0,4,0,0"/>

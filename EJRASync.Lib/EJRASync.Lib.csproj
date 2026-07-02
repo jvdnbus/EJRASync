@@ -14,15 +14,12 @@
   <Import Project="..\Version.props" />
 
   <Target Name="GenerateVersionClass" BeforeTargets="BeforeCompile">
-    <WriteLinesToFile
-      File="GeneratedVersion.cs"
-      Lines="namespace EJRASync.Lib { public static partial class Constants { public static readonly string Version = &quot;$(VersionPrefix)&quot;%3b } }"
-      Overwrite="true" />
+    <WriteLinesToFile File="GeneratedVersion.cs" Lines="namespace EJRASync.Lib { public static partial class Constants { public static readonly string Version = &quot;$(VersionPrefix)&quot;%3b } }" Overwrite="true" />
   </Target>
 
   <ItemGroup>
     <PackageReference Include="AWSSDK.S3" Version="4.0.6.4" />
-    <PackageReference Include="log4net" Version="3.1.0" />
+    <PackageReference Include="log4net" Version="3.3.2" />
     <PackageReference Include="Sentry" Version="5.14.0" />
     <PackageReference Include="Spectre.Console" Version="0.50.0" />
     <PackageReference Include="ZstdSharp.Port" Version="0.8.6" />
